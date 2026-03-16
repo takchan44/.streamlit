@@ -933,173 +933,199 @@ with col_port:
         st.info("종목을 추가해보세요.")
 
 st.markdown("---")
-col_news,col_ai = st.columns([1,1])
+col_news, col_ai = st.columns([1, 1])
 
+# ── 📰 주요 뉴스 (간단 버전) ─────────────────────────────
 with col_news:
-    st.markdown("### 📰 AI 뉴스 분석")
-    try: news_api_key = st.secrets.get("GEMINI_API_KEY","")
-    except Exception: news_api_key=""
+    st.markdown("### 📰 주요 뉴스")
 
     @st.cache_data(ttl=3600, show_spinner=False)
-    def get_ai_news_with_search(stock_name, ticker, api_key, date_key=""):
-        """Gemini Google Search Tool로 실제 최신 뉴스 검색 + 분석"""
-        if not api_key:
-            return None
+    def get_simple_news(stock_name, ticker, api_key, date_key=""):
+        if not api_key: return None
         import json, re
+        is_kr = ticker.endswith(".KS") or ticker.endswith(".KQ")
+        code  = ticker.replace(".KS","").replace(".KQ","")
+        today = datetime.today().strftime("%Y년 %m월 %d일")
+        lang  = "한국어" if is_kr else "영어"
         try:
             import google.generativeai as genai2
-            import google.generativeai.types as gtypes
             genai2.configure(api_key=api_key)
-
-            is_kr   = ticker.endswith(".KS") or ticker.endswith(".KQ")
-            lang    = "한국어" if is_kr else "영어"
-            code    = ticker.replace(".KS","").replace(".KQ","")
-            today   = datetime.today().strftime("%Y년 %m월 %d일")
-            search_q = f"{stock_name} {code} 주식 뉴스" if is_kr else f"{stock_name} {code} stock news"
-
-            # google_search tool 사용 (Gemini 1.5 Flash)
+            # 구글 검색 시도
             try:
-                model = genai2.GenerativeModel(
-                    model_name="gemini-1.5-flash-latest",
-                    tools=["google_search_retrieval"],
-                )
-                prompt = f"""오늘은 {today}입니다.
-구글 뉴스에서 '{search_q}' 를 검색해서 최신 뉴스를 찾아주세요.
-
-검색 결과를 바탕으로 투자자가 주목해야 할 뉴스 최대 5개를 선별하고,
-각 뉴스에 대해 아래 JSON 배열 형식으로만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
-
-[
-  {{
-    "rank": 1,
-    "title": "실제 뉴스 제목 (40자 이내)",
-    "source": "뉴스 출처 (언론사명)",
-    "date": "날짜 (MM/DD 형식)",
-    "summary": "뉴스 핵심 내용 요약 (60자 이내)",
-    "impact": "긍정 또는 부정 또는 중립",
-    "outlook": "이 뉴스가 주가에 미치는 영향과 향후 전망 (2~3문장)",
-    "category": "실적 또는 기술 또는 규제 또는 시장 또는 경쟁 또는 배당 또는 기타"
-  }}
-]"""
-                resp = model.generate_content(prompt)
-                text = resp.text.strip()
-                match = re.search(r'\[.*\]', text, re.DOTALL)
+                m = genai2.GenerativeModel("gemini-1.5-flash-latest", tools=["google_search_retrieval"])
+                prompt = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최신 주요 뉴스 5개를 찾아서
+아래 JSON 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
+[{{"rank":1,"title":"뉴스제목(40자이내)","source":"언론사","date":"MM/DD","summary":"한줄요약(50자이내)","impact":"긍정 또는 부정 또는 중립"}}]"""
+                resp = m.generate_content(prompt)
+                match = re.search(r'\[.*\]', resp.text.strip(), re.DOTALL)
                 if match:
                     items = json.loads(match.group())
-                    if items and len(items) > 0:
-                        return {"items": items, "method": "search"}
-            except Exception:
-                pass
-
-            # fallback: 웹 검색 없이 Gemini 자체 지식으로 분석
-            model2 = genai2.GenerativeModel("gemini-1.5-flash-latest")
-            prompt2 = f"""오늘은 {today}입니다.
-'{stock_name}({code})' 종목의 최근 주요 뉴스와 이슈를 바탕으로
-투자자가 주목해야 할 정보 5가지를 {lang}로 분석해주세요.
-
-반드시 아래 JSON 배열 형식으로만 출력하세요.
-[
-  {{
-    "rank": 1,
-    "title": "뉴스/이슈 제목 (40자 이내)",
-    "source": "출처",
-    "date": "최근",
-    "summary": "핵심 내용 (60자 이내)",
-    "impact": "긍정 또는 부정 또는 중립",
-    "outlook": "주가 영향 및 향후 전망 (2~3문장)",
-    "category": "실적 또는 기술 또는 규제 또는 시장 또는 경쟁 또는 배당 또는 기타"
-  }}
-]"""
-            resp2 = model2.generate_content(prompt2)
-            text2 = resp2.text.strip()
-            match2 = re.search(r'\[.*\]', text2, re.DOTALL)
+                    if items: return items
+            except Exception: pass
+            # 폴백
+            m2 = genai2.GenerativeModel("gemini-1.5-flash-latest")
+            prompt2 = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최근 주요 뉴스 5개를 {lang}로
+JSON 배열 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
+[{{"rank":1,"title":"제목","source":"출처","date":"날짜","summary":"요약","impact":"긍정 또는 부정 또는 중립"}}]"""
+            resp2 = m2.generate_content(prompt2)
+            match2 = re.search(r'\[.*\]', resp2.text.strip(), re.DOTALL)
             if match2:
-                items2 = json.loads(match2.group())
-                if items2:
-                    return {"items": items2, "method": "knowledge"}
-        except Exception:
-            pass
+                return json.loads(match2.group())
+        except Exception: pass
         return None
 
-    if not news_api_key:
-        st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정하면 AI 뉴스 분석을 볼 수 있어요.")
+    try: _news_key = st.secrets.get("GEMINI_API_KEY","")
+    except Exception: _news_key=""
+
+    if not _news_key:
+        st.info("GEMINI_API_KEY를 설정하면 주요 뉴스를 볼 수 있어요.")
     else:
-        # 날짜 단위 캐시 — 같은 날 재호출 방지 (quota 절약)
-        _today_key = datetime.today().strftime("%Y%m%d")
-        with st.spinner(f"Gemini가 {display_name} 최신 뉴스 검색 중..."):
-            result = get_ai_news_with_search(display_name, ticker_input, news_api_key, _today_key)
+        _dk = datetime.today().strftime("%Y%m%d")
+        with st.spinner("뉴스 불러오는 중..."):
+            _news_items = get_simple_news(display_name, ticker_input, _news_key, _dk)
 
-        if result:
-            items   = result.get("items", [])
-            method  = result.get("method", "knowledge")
-            impact_cfg = {
-                "긍정": ("#22c55e", "rgba(34,197,94,0.1)",  "📈"),
-                "부정": ("#ef4444", "rgba(239,68,68,0.1)",  "📉"),
-                "중립": ("#94a3b8", "rgba(148,163,184,0.08)","➡️"),
-            }
-            cat_colors = {
-                "실적":"#3b82f6","기술":"#8b5cf6","규제":"#f59e0b",
-                "시장":"#06b6d4","경쟁":"#ec4899","배당":"#10b981","기타":"#64748b"
-            }
-            for item in items[:5]:
-                impact       = item.get("impact","중립")
-                txt_c, bg_c, icon = impact_cfg.get(impact, ("#94a3b8","rgba(148,163,184,0.08)","➡️"))
-                cat          = item.get("category","기타")
-                cat_c        = cat_colors.get(cat,"#64748b")
-                source       = item.get("source","")
-                date_str     = item.get("date","")
-                outlook      = item.get("outlook","")
+        _impact_color = {"긍정":"#22c55e","부정":"#ef4444","중립":"#94a3b8"}
+        _impact_icon  = {"긍정":"▲","부정":"▼","중립":"━"}
+
+        if _news_items:
+            for _ni in _news_items[:5]:
+                _imp = _ni.get("impact","중립")
+                _ic  = _impact_color.get(_imp,"#94a3b8")
+                _ii  = _impact_icon.get(_imp,"━")
+                _src = _ni.get("source","")
+                _dt  = _ni.get("date","")
                 st.markdown(f"""
-<div style="border:1px solid rgba(30,41,59,0.8);border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#0d1526;">
-  <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
-    <span style="background:#1e293b;color:#64748b;font-size:10px;padding:2px 7px;border-radius:20px;">#{item.get('rank',1)}</span>
-    <span style="background:{cat_c}22;color:{cat_c};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;">{cat}</span>
-    <span style="background:{bg_c};color:{txt_c};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;">{icon} {impact}</span>
-    {f'<span style="color:#475569;font-size:10px;margin-left:auto;">{source} · {date_str}</span>' if source else ''}
+<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+  <span style="color:{_ic};font-size:12px;font-weight:700;margin-top:2px;flex-shrink:0;">{_ii}</span>
+  <div style="flex:1;min-width:0;">
+    <p style="color:#e2e8f0;font-size:12px;font-weight:500;margin:0 0 3px;line-height:1.5;">{_ni.get('title','')}</p>
+    <p style="color:#64748b;font-size:11px;margin:0;">{_ni.get('summary','')}
+    {f'<span style="color:#475569;margin-left:6px;">{_src} · {_dt}</span>' if _src else ''}
+    </p>
   </div>
-  <p style="color:#e2e8f0;font-size:13px;font-weight:600;margin:0 0 5px;line-height:1.5;">{item.get('title','')}</p>
-  <p style="color:#64748b;font-size:11px;margin:0 0 8px;">📌 {item.get('summary','')}</p>
-  <div style="background:rgba(30,64,175,0.12);border-left:2px solid #3b82f6;border-radius:0 6px 6px 0;padding:8px 10px;">
-    <p style="color:#93c5fd;font-size:11px;margin:0;line-height:1.7;">🔭 <strong>전망:</strong> {outlook}</p>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-            src_label = "구글 검색 기반" if method=="search" else "AI 분석 기반"
-            st.caption(f"🤖 Gemini · {src_label} · {datetime.today().strftime('%m/%d %H:%M')} 기준")
-
-            if st.button("🔄 뉴스 다시 분석", key="refresh_news"):
-                get_ai_news_with_search.clear()
-                st.rerun()
+</div>""", unsafe_allow_html=True)
+            st.caption(f"🤖 Gemini · {datetime.today().strftime('%m/%d %H:%M')} 기준")
+            if st.button("🔄 새로고침", key="refresh_news"):
+                get_simple_news.clear(); st.rerun()
         else:
-            st.warning("⏳ Gemini API 할당량 초과 또는 오류. 1분 후 🔄 버튼을 눌러주세요.")
+            st.warning("⏳ API 한도 초과 또는 오류. 잠시 후 다시 시도해주세요.")
 
-
+# ── 🤖 AI 주식 분석 (Gem 스타일 대화형) ─────────────────
 with col_ai:
-    st.markdown("### 🤖 AI 주식 분석 (Gemini)")
-    try: api_key = st.secrets.get("GEMINI_API_KEY","")
-    except Exception: api_key=""
-    question = st.text_area("질문 입력",
-        placeholder=f"예: {display_name} 지금 매수하기 좋은 타이밍인가요?", height=100)
-    if st.button("AI 분석 요청 ↗", use_container_width=True):
-        if not api_key: st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정해주세요.")
-        elif not question.strip(): st.warning("질문을 입력해주세요.")
+    st.markdown("### 🤖 AI 주식 분석")
+
+    try: _ai_key = st.secrets.get("GEMINI_API_KEY","")
+    except Exception: _ai_key=""
+
+    # 대화 히스토리 초기화
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "chat_ticker" not in st.session_state:
+        st.session_state.chat_ticker = ""
+
+    # 종목 바뀌면 대화 초기화
+    if st.session_state.chat_ticker != ticker_input:
+        st.session_state.chat_history = []
+        st.session_state.chat_ticker  = ticker_input
+
+    # 시스템 컨텍스트 (현재 종목 정보 자동 포함)
+    _is_kr = ticker_input.endswith(".KS") or ticker_input.endswith(".KQ")
+    _port_summary = ", ".join([
+        f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
+        for p in st.session_state.portfolio
+    ]) or "없음"
+    _stock_ctx = f"""현재 조회 종목: {display_name} ({code_display})
+현재가: {fmt_p(price)} | 등락률: {chg_pct:+.2f}% | 시가총액: {format_cap(mkt_cap)}
+52주 범위: {fmt_p(low_52)} ~ {fmt_p(high_52)} | P/E: {f"{pe:.1f}" if pe else "N/A"}
+보유 포트폴리오: {_port_summary}"""
+
+    _system_prompt = f"""당신은 전문 주식 분석가 AI입니다. 사용자의 투자 결정을 돕는 명확하고 실용적인 분석을 제공합니다.
+
+{_stock_ctx}
+
+분석 원칙:
+- 데이터 기반의 객관적 분석 제공
+- 투자 위험 항상 언급
+- 한국어로 친절하게 답변
+- 핵심을 간결하게 전달 (너무 길지 않게)
+- 매수/매도 의견 제시 시 근거 명확히 설명"""
+
+    # 대화창 표시
+    _chat_container = st.container(height=380)
+    with _chat_container:
+        if not st.session_state.chat_history:
+            st.markdown(f"""
+<div style="text-align:center;padding:30px 20px;color:#475569;">
+  <div style="font-size:28px;margin-bottom:12px;">🤖</div>
+  <p style="font-size:13px;font-weight:500;color:#94a3b8;margin:0 0 6px;">{display_name} AI 분석가</p>
+  <p style="font-size:12px;color:#475569;margin:0;">종목에 대해 무엇이든 물어보세요</p>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 10px;">
+  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">지금 매수 타이밍인가요?</span>
+  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">현재 주가 고평가인가요?</span>
+  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">리스크 요인을 알려주세요</span>
+</div>""", unsafe_allow_html=True)
         else:
-            ps=", ".join([f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
-                          for p in st.session_state.portfolio]) or "없음"
-            ss=f"""종목: {name} ({code_display})
-현재가: {fmt_p(price)}
-등락률: {chg_pct:+.2f}%
-시가총액: {format_cap(mkt_cap)}
-P/E: {f"{pe:.1f}" if pe else "N/A"}
-52주 범위: {fmt_p(low_52)} ~ {fmt_p(high_52)}
-포트폴리오: {ps}"""
-            with st.spinner("Gemini가 분석 중..."):
+            for _msg in st.session_state.chat_history:
+                if _msg["role"] == "user":
+                    st.markdown(f"""
+<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+  <div style="background:#1e40af;color:#fff;font-size:12px;padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:85%;line-height:1.5;">{_msg['content']}</div>
+</div>""", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+<div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;">
+  <div style="width:24px;height:24px;background:#0f172a;border:1px solid #1e293b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🤖</div>
+  <div style="background:#0d1526;border:1px solid #1e293b;color:#e2e8f0;font-size:12px;padding:8px 12px;border-radius:2px 12px 12px 12px;max-width:90%;line-height:1.6;">{_msg['content']}</div>
+</div>""", unsafe_allow_html=True)
+
+    # 입력창
+    _q_col, _btn_col = st.columns([5, 1])
+    with _q_col:
+        _question = st.text_input("질문 입력", placeholder=f"{display_name}에 대해 질문하세요...",
+                                  key="chat_input", label_visibility="collapsed")
+    with _btn_col:
+        _send = st.button("전송", key="chat_send", use_container_width=True, type="primary")
+
+    # 빠른 질문 버튼
+    _qcols = st.columns(3)
+    _quick_qs = ["매수 타이밍?", "고평가 여부?", "주요 리스크?"]
+    for _qi, (_qc, _qq) in enumerate(zip(_qcols, _quick_qs)):
+        with _qc:
+            if st.button(_qq, key=f"quick_{_qi}", use_container_width=True):
+                _question = _qq
+                _send = True
+
+    # 전송 처리
+    if _send and _question.strip():
+        if not _ai_key:
+            st.warning("GEMINI_API_KEY를 Secrets에 설정해주세요.")
+        else:
+            st.session_state.chat_history.append({"role":"user","content":_question.strip()})
+            with st.spinner("분석 중..."):
                 try:
-                    genai.configure(api_key=api_key)
-                    model=genai.GenerativeModel(model_name="gemini-1.5-flash-latest",
-                        system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요.")
-                    resp=model.generate_content(f"주식 데이터:\n{ss}\n\n질문: {question}")
-                    st.success(resp.text)
+                    import google.generativeai as genai2
+                    genai2.configure(api_key=_ai_key)
+                    _model = genai2.GenerativeModel(
+                        model_name="gemini-1.5-flash-latest",
+                        system_instruction=_system_prompt
+                    )
+                    # 대화 히스토리 포함해서 전송
+                    _history_text = ""
+                    for _h in st.session_state.chat_history[:-1][-6:]:  # 최근 6개만
+                        _role = "사용자" if _h["role"]=="user" else "AI"
+                        _history_text += f"{_role}: {_h['content']}
+"
+                    _full_prompt = f"{_history_text}사용자: {_question.strip()}"
+                    _resp = _model.generate_content(_full_prompt)
+                    _answer = _resp.text
+                    st.session_state.chat_history.append({"role":"assistant","content":_answer})
                 except Exception as e:
-                    st.error(f"오류 발생: {e}")
+                    st.session_state.chat_history.append({"role":"assistant","content":f"오류: {str(e)}"})
+            st.rerun()
+
+    # 대화 초기화 버튼
+    if st.session_state.chat_history:
+        if st.button("🗑 대화 초기화", key="clear_chat"):
+            st.session_state.chat_history = []
+            st.rerun()
