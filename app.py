@@ -131,8 +131,12 @@ with st.sidebar:
                 format_func=lambda x: f"{x}  ({results[x].replace('.KS','')})"
             )
             if st.button("조회", use_container_width=True):
-                st.session_state.selected_ticker = results[sel]
-                st.rerun()
+                ticker = results.get(sel)
+                if ticker:
+                    st.session_state.selected_ticker = ticker
+                    st.rerun()
+                else:
+                    st.error("종목을 찾을 수 없습니다.")
         else:
             st.caption("검색 결과가 없습니다.")
             manual = search_query.strip().zfill(6) + ".KS"
@@ -147,8 +151,12 @@ with st.sidebar:
             format_func=lambda x: f"{x}  ({KOSPI_STOCKS[x].replace('.KS','')})"
         )
         if st.button("조회", use_container_width=True):
-            st.session_state.selected_ticker = KOSPI_STOCKS[sel]
-            st.rerun()
+            ticker = KOSPI_STOCKS.get(sel)
+            if ticker:
+                st.session_state.selected_ticker = ticker
+                st.rerun()
+            else:
+                st.error("종목을 찾을 수 없습니다. 다시 선택해주세요.")
  
     st.markdown("---")
     st.markdown("### ⭐ 관심 종목")
@@ -180,8 +188,8 @@ with st.sidebar:
             wpick = st.selectbox("선택", list(wqr.keys()), key="wpick",
                                  format_func=lambda x: f"{x} ({wqr[x].replace('.KS','')})")
             if st.button("관심 추가", use_container_width=True):
-                wt = wqr[wpick]
-                if wt not in st.session_state.watchlist:
+                wt = wqr.get(wpick)
+                if wt and wt not in st.session_state.watchlist:
                     st.session_state.watchlist.append(wt)
                     st.rerun()
  
