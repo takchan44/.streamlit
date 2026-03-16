@@ -929,8 +929,8 @@ with col_news:
     try: news_api_key = st.secrets.get("GEMINI_API_KEY","")
     except Exception: news_api_key=""
 
-    @st.cache_data(ttl=600, show_spinner=False)
-    def get_ai_news_with_search(stock_name, ticker, api_key):
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def get_ai_news_with_search(stock_name, ticker, api_key, date_key=""):
         """Gemini Google Search Tool로 실제 최신 뉴스 검색 + 분석"""
         if not api_key:
             return None
@@ -949,7 +949,7 @@ with col_news:
             # google_search tool 사용 (Gemini 1.5 Flash)
             try:
                 model = genai2.GenerativeModel(
-                    model_name="gemini-2.0-flash",
+                    model_name="gemini-1.5-flash-latest",
                     tools=["google_search_retrieval"],
                 )
                 prompt = f"""오늘은 {today}입니다.
@@ -981,7 +981,7 @@ with col_news:
                 pass
 
             # fallback: 웹 검색 없이 Gemini 자체 지식으로 분석
-            model2 = genai2.GenerativeModel("gemini-2.0-flash")
+            model2 = genai2.GenerativeModel("gemini-1.5-flash-latest")
             prompt2 = f"""오늘은 {today}입니다.
 '{stock_name}({code})' 종목의 최근 주요 뉴스와 이슈를 바탕으로
 투자자가 주목해야 할 정보 5가지를 {lang}로 분석해주세요.
@@ -1013,8 +1013,10 @@ with col_news:
     if not news_api_key:
         st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정하면 AI 뉴스 분석을 볼 수 있어요.")
     else:
+        # 날짜 단위 캐시 — 같은 날 재호출 방지 (quota 절약)
+        _today_key = datetime.today().strftime("%Y%m%d")
         with st.spinner(f"Gemini가 {display_name} 최신 뉴스 검색 중..."):
-            result = get_ai_news_with_search(display_name, ticker_input, news_api_key)
+            result = get_ai_news_with_search(display_name, ticker_input, news_api_key, _today_key)
 
         if result:
             items   = result.get("items", [])
@@ -1059,16 +1061,8 @@ with col_news:
                 get_ai_news_with_search.clear()
                 st.rerun()
         else:
-            st.error("뉴스 분석에 실패했습니다.")
-            # 디버그: 직접 오류 확인
-            try:
-                import google.generativeai as genai2
-                genai2.configure(api_key=news_api_key)
-                model_test = genai2.GenerativeModel("gemini-2.0-flash")
-                test_resp = model_test.generate_content("안녕하세요. 테스트입니다.")
-                st.info(f"✅ Gemini 연결 성공: {test_resp.text[:50]}")
-            except Exception as e:
-                st.warning(f"❌ Gemini 오류: {str(e)}")
+            st.warning("⏳ Gemini API 할당량 초과 또는 오류. 1분 후 🔄 버튼을 눌러주세요.")
+
 
 with col_ai:
     st.markdown("### 🤖 AI 주식 분석 (Gemini)")
@@ -1092,7 +1086,7 @@ P/E: {f"{pe:.1f}" if pe else "N/A"}
             with st.spinner("Gemini가 분석 중..."):
                 try:
                     genai.configure(api_key=api_key)
-                    model=genai.GenerativeModel(model_name="gemini-2.0-flash",
+                    model=genai.GenerativeModel(model_name="gemini-1.5-flash-latest",
                         system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요.")
                     resp=model.generate_content(f"주식 데이터:\n{ss}\n\n질문: {question}")
                     st.success(resp.text)
