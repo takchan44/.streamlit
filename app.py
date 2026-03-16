@@ -458,30 +458,57 @@ with col_chart:
                 annotation_font=dict(size=11, color=up_color)
             )
 
+        # 매물대 — Scatter 막대로 변환 (줌 연동을 위해 shapes 대신 trace 사용)
+        if show_vp:
+            current_close = hist["Close"].iloc[-1]
+            for _, row in vp_df.iterrows():
+                if row["vol"] == 0:
+                    continue
+                bar_days = max(int(vp_max_width_days * row["vol"] / vp_max), 1)
+                bar_end_x = x_end - pd.Timedelta(days=bar_days)
+                is_above  = row["mid"] >= current_close
+                fill  = "rgba(49,130,246,0.55)" if is_above else "rgba(49,130,246,0.25)"
+                # 수평 막대를 얇은 Scatter fill로 표현 → 줌/팬에 완전 연동
+                fig.add_trace(go.Scatter(
+                    x=[bar_end_x, x_end, x_end, bar_end_x, bar_end_x],
+                    y=[row["lo"], row["lo"], row["hi"], row["hi"], row["lo"]],
+                    fill="toself",
+                    fillcolor=fill,
+                    line=dict(width=0),
+                    mode="lines",
+                    showlegend=False,
+                    hoverinfo="skip",
+                ))
+            # 현재가 점선 — trace로 (add_hline은 paper 좌표라 줌 무관)
+            fig.add_trace(go.Scatter(
+                x=[x_start, x_end],
+                y=[current_close, current_close],
+                mode="lines",
+                line=dict(color=up_color, width=1, dash="dot"),
+                showlegend=False,
+                hovertemplate=f"현재가: {format_price(current_close)}<extra></extra>",
+            ))
+
         # 사용자가 그린 선
         for ln in st.session_state.drawn_lines:
             if ln["type"] == "trend":
-                fig.add_shape(
-                    type="line",
-                    x0=ln["x0"], y0=ln["y0"],
-                    x1=ln["x1"], y1=ln["y1"],
+                fig.add_trace(go.Scatter(
+                    x=[ln["x0"], ln["x1"]],
+                    y=[ln["y0"], ln["y1"]],
+                    mode="lines",
                     line=dict(color=ln["color"], width=1.5),
-                    xref="x", yref="y"
-                )
-                fig.add_annotation(
-                    x=ln["x1"], y=ln["y1"],
-                    text=f"  {format_price(ln['y1'])}",
-                    showarrow=False, font=dict(size=10, color=ln["color"]),
-                    xref="x", yref="y"
-                )
+                    showlegend=False,
+                    hovertemplate=f"₩%{{y:,.0f}}<extra>추세선</extra>",
+                ))
             elif ln["type"] == "hline":
-                fig.add_hline(
-                    y=ln["y"],
+                fig.add_trace(go.Scatter(
+                    x=[x_start, x_end],
+                    y=[ln["y"], ln["y"]],
+                    mode="lines",
                     line=dict(color=ln["color"], width=1.5, dash="dash"),
-                    annotation_text=f" {format_price(ln['y'])}",
-                    annotation_position="right",
-                    annotation_font=dict(size=10, color=ln["color"])
-                )
+                    showlegend=False,
+                    hovertemplate=f"{format_price(ln['y'])}<extra>수평선</extra>",
+                ))
 
         tick_fmt_map = {"일": "%m.%d", "주": "%y.%m.%d", "월": "%y.%m", "년": "%Y"}
         tick_fmt = tick_fmt_map.get(plabel, "%m.%d")
@@ -508,13 +535,13 @@ with col_chart:
                 font=dict(size=11, color="#aaa"),
                 bgcolor="rgba(0,0,0,0)",
             ),
-            dragmode="zoom",
+            dragmode="pan",       # 기본: 드래그로 이동
         )
         st.plotly_chart(fig, use_container_width=True, config={
             "displayModeBar": True,
-            "modeBarButtonsToRemove": ["lasso2d","select2d","autoScale2d"],
+            "modeBarButtonsToRemove": ["lasso2d","select2d","autoScale2d","zoom2d"],
             "displaylogo": False,
-            "scrollZoom": True,
+            "scrollZoom": True,   # 마우스 휠로만 줌
         })
 
         # 거래량 차트
