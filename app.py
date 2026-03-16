@@ -143,7 +143,11 @@ if "ma_settings"     not in st.session_state:
     ]
 if "vp_settings" not in st.session_state:
     st.session_state.vp_settings = {"bins":15,"color_above":"#3182F6","color_below":"#5BA3F5","show":True}
-if "chart_height"  not in st.session_state: st.session_state.chart_height = 500
+if "chart_height"    not in st.session_state: st.session_state.chart_height = 500
+if "indicators"      not in st.session_state: st.session_state.indicators = []
+if "auto_refresh"    not in st.session_state: st.session_state.auto_refresh = True
+if "refresh_sec"     not in st.session_state: st.session_state.refresh_sec = 30
+if "last_refresh"    not in st.session_state: st.session_state.last_refresh = 0
 
 # ── 종목 로딩 ───────────────────────────────────────────
 if not st.session_state.kospi_loaded:
@@ -204,7 +208,7 @@ def _yf_get(url, timeout=8):
     except Exception:
         return None
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_stock_info(ticker):
     # Yahoo Finance v8 quoteSummary API
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
@@ -406,6 +410,45 @@ with st.sidebar:
                     st.session_state.watchlist.append(wt); st.rerun()
 
 # ── 메인 ────────────────────────────────────────────────
+# ── 자동 새로고침 ─────────────────────────────────────
+import time as _time_module
+
+_now = _time_module.time()
+_elapsed = _now - st.session_state.last_refresh
+
+# 사이드바 상단에 새로고침 컨트롤
+_rf_col1, _rf_col2, _rf_col3 = st.sidebar.columns([1, 2, 1])
+with _rf_col1:
+    st.session_state.auto_refresh = st.checkbox(
+        "자동", value=st.session_state.auto_refresh, key="auto_rf_chk"
+    )
+with _rf_col2:
+    _options = [10, 30, 60, 120]
+    _labels  = ["10초", "30초", "1분", "2분"]
+    _cur_idx = _options.index(st.session_state.refresh_sec) if st.session_state.refresh_sec in _options else 1
+    _sel = st.selectbox("새로고침", _labels, index=_cur_idx, key="rf_interval_sel", label_visibility="collapsed")
+    st.session_state.refresh_sec = _options[_labels.index(_sel)]
+with _rf_col3:
+    if st.button("🔄", key="manual_refresh", help="지금 새로고침"):
+        get_stock_info.clear()
+        st.session_state.last_refresh = _now
+        st.rerun()
+
+# 자동 새로고침 타이머
+if st.session_state.auto_refresh:
+    _remain = max(0, st.session_state.refresh_sec - int(_elapsed))
+    st.sidebar.caption(f"⏱ {_remain}초 후 자동 갱신")
+    if _elapsed >= st.session_state.refresh_sec:
+        get_stock_info.clear()
+        st.session_state.last_refresh = _now
+        st.rerun()
+    # Streamlit이 자동으로 재실행되도록 빈 placeholder에 타이머 설정
+    _timer_placeholder = st.sidebar.empty()
+    _timer_placeholder.markdown(
+        f"""<meta http-equiv="refresh" content="{_remain}">""",
+        unsafe_allow_html=True
+    )
+
 ticker_input = st.session_state.selected_ticker
 display_name = TICKER_NAME_MAP.get(ticker_input, ticker_input.replace(".KS",""))
 code_display = ticker_input.replace(".KS","")
