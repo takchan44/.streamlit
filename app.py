@@ -329,28 +329,80 @@ st.markdown("---")
 col_chart, col_port = st.columns([2, 1])
 
 with col_chart:
-    st.markdown("### 주가 차트")
     period_map = {"1주": "5d", "1달": "1mo", "3달": "3mo", "6달": "6mo", "1년": "1y", "5년": "5y"}
-    plabel = st.radio("기간", list(period_map.keys()), horizontal=True, index=2)
+    pcols = st.columns(len(period_map))
+    if "chart_period" not in st.session_state:
+        st.session_state.chart_period = "3달"
+    for i, (label, _) in enumerate(period_map.items()):
+        with pcols[i]:
+            if st.button(label, key=f"period_{label}", use_container_width=True):
+                st.session_state.chart_period = label
+    plabel = st.session_state.chart_period
     hist = get_history(ticker_input, period_map[plabel])
+
     if not hist.empty:
+        is_up = hist["Close"].iloc[-1] >= hist["Close"].iloc[0]
+        line_color = "#3182F6" if is_up else "#F04452"
+        fill_color = "rgba(49,130,246,0.08)" if is_up else "rgba(240,68,82,0.08)"
+        vol_color  = "rgba(49,130,246,0.25)" if is_up else "rgba(240,68,82,0.25)"
+        first_price = hist["Close"].iloc[0]
+        last_price  = hist["Close"].iloc[-1]
+        price_diff  = last_price - first_price
+        price_diff_pct = (price_diff / first_price * 100) if first_price else 0
+        sign = "+" if price_diff >= 0 else ""
+        st.markdown(
+            f"<span style='font-size:13px;color:{line_color};font-weight:500;'>"
+            f"{sign}{format_price(price_diff)} ({sign}{price_diff_pct:.2f}%)</span>"
+            f"<span style='font-size:12px;color:#888;margin-left:6px;'>{plabel} 기준</span>",
+            unsafe_allow_html=True
+        )
         fig = go.Figure()
-        fig.add_trace(go.Candlestick(
-            x=hist.index, open=hist["Open"], high=hist["High"],
-            low=hist["Low"], close=hist["Close"], name=code_display,
-            increasing_line_color="#1D9E75", decreasing_line_color="#E24B4A"
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist["Close"],
+            mode="lines",
+            line=dict(color=line_color, width=2),
+            fill="tozeroy", fillcolor=fill_color,
+            hovertemplate="<b>%{x|%Y.%m.%d}</b><br>₩%{y:,.0f}<extra></extra>",
+            name="종가"
         ))
-        fig.add_trace(go.Bar(
-            x=hist.index, y=hist["Volume"], name="거래량",
-            yaxis="y2", marker_color="rgba(100,130,200,0.3)"
+        fig.add_trace(go.Scatter(
+            x=[hist.index[-1]], y=[hist["Close"].iloc[-1]],
+            mode="markers",
+            marker=dict(color=line_color, size=7, line=dict(color="white", width=2)),
+            hoverinfo="skip", showlegend=False
         ))
         fig.update_layout(
-            yaxis2=dict(overlaying="y", side="right", showgrid=False, title="거래량"),
-            xaxis_rangeslider_visible=False, height=400,
-            margin=dict(l=0, r=0, t=20, b=0),
-            legend=dict(orientation="h", y=1.05)
+            height=280, margin=dict(l=0, r=0, t=8, b=0),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(
+                showgrid=False, zeroline=False, showline=False,
+                tickfont=dict(size=11, color="#aaa"),
+                tickformat="%m.%d" if plabel in ["1주","1달"] else "%y.%m",
+            ),
+            yaxis=dict(
+                showgrid=True, gridcolor="rgba(128,128,128,0.1)",
+                zeroline=False, showline=False,
+                tickfont=dict(size=11, color="#aaa"),
+                tickformat=",", side="right"
+            ),
+            hovermode="x unified", showlegend=False,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        fig_vol = go.Figure()
+        fig_vol.add_trace(go.Bar(
+            x=hist.index, y=hist["Volume"],
+            marker_color=vol_color,
+            hovertemplate="<b>%{x|%Y.%m.%d}</b><br>%{y:,.0f}주<extra></extra>",
+        ))
+        fig_vol.update_layout(
+            height=80, margin=dict(l=0, r=0, t=0, b=0),
+            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
+            yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, side="right"),
+            showlegend=False, bargap=0.2,
+        )
+        st.plotly_chart(fig_vol, use_container_width=True, config={"displayModeBar": False})
+        st.caption("거래량")
     else:
         st.info("차트 데이터를 불러올 수 없습니다.")
 
