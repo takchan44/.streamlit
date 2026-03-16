@@ -911,17 +911,131 @@ st.markdown("---")
 col_news,col_ai = st.columns([1,1])
 
 with col_news:
-    st.markdown("### 📰 관련 뉴스")
-    news = get_news(ticker_input)
-    if news:
-        for item in news:
-            t2=item.get("title",""); lk=item.get("link","#")
-            pb2=item.get("publisher",""); pt=item.get("providerPublishTime",0)
-            ts=datetime.fromtimestamp(pt).strftime("%m/%d %H:%M") if pt else ""
-            st.markdown(f"**[{t2}]({lk})**  \n_{pb2} · {ts}_")
+    st.markdown("### 📰 AI 뉴스 분석")
+    try: news_api_key = st.secrets.get("GEMINI_API_KEY","")
+    except Exception: news_api_key=""
+
+    @st.cache_data(ttl=300, show_spinner=False)
+    def get_google_news(ticker, stock_name):
+        """구글 뉴스 RSS로 종목 관련 뉴스 수집"""
+        import urllib.request, urllib.parse
+        from xml.etree import ElementTree as ET
+
+        results = []
+        # 검색어: 한국 종목은 한글명, 미국은 영문 티커
+        queries = [stock_name, ticker.replace(".KS","")]
+        for q in queries:
+            try:
+                enc_q = urllib.parse.quote(q)
+                url = f"https://news.google.com/rss/search?q={enc_q}+주식&hl=ko&gl=KR&ceid=KR:ko"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=6) as r:
+                    tree = ET.parse(r)
+                root = tree.getroot()
+                channel = root.find("channel")
+                if channel is None: continue
+                for item in channel.findall("item")[:8]:
+                    title = item.findtext("title","")
+                    link  = item.findtext("link","#")
+                    pub   = item.findtext("pubDate","")
+                    src_el = item.find("{http://www.google.com/schemas/sitemap-news/0.9}news")
+                    source = item.findtext("source","Google 뉴스")
+                    results.append({"title": title, "link": link, "pub": pub, "source": source})
+            except Exception:
+                pass
+            if len(results) >= 8:
+                break
+        return results[:10]
+
+    @st.cache_data(ttl=300, show_spinner=False)
+    def analyze_news_with_gemini(news_list, stock_name, api_key):
+        """Gemini로 뉴스 분석 후 주목할 5가지 선별"""
+        if not api_key or not news_list:
+            return None
+        try:
+            news_text = "\n".join([
+                f"{i+1}. [{item['title']}] ({item['source']}, {item['pub'][:16]})"
+                for i, item in enumerate(news_list)
+            ])
+            prompt = f"""
+다음은 '{stock_name}' 관련 최신 뉴스 목록입니다.
+
+{news_text}
+
+위 뉴스 중 투자자가 주목해야 할 중요 정보 5가지를 선별하고, 각각에 대해 아래 형식으로 간결하게 분석해주세요.
+
+출력 형식 (JSON):
+[
+  {{
+    "rank": 1,
+    "title": "뉴스 제목 (간략히)",
+    "summary": "핵심 내용 한 줄 요약",
+    "impact": "주가에 미치는 영향 (긍정/부정/중립)",
+    "reason": "주목해야 하는 이유 (1~2문장)"
+  }},
+  ...
+]
+
+JSON만 출력하고 다른 텍스트는 포함하지 마세요.
+"""
+            import google.generativeai as genai2
+            genai2.configure(api_key=api_key)
+            model = genai2.GenerativeModel("gemini-1.5-flash")
+            resp = model.generate_content(prompt)
+            text = resp.text.strip()
+            # JSON 파싱
+            import json, re
+            match = re.search(r'\[.*\]', text, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except Exception:
+            pass
+        return None
+
+    raw_news = get_google_news(ticker_input, display_name)
+
+    if not raw_news:
+        st.info("뉴스를 불러올 수 없습니다.")
+    elif not news_api_key:
+        # API 키 없으면 그냥 목록만 표시
+        for item in raw_news[:5]:
+            st.markdown(f"**[{item['title']}]({item['link']})**  \n_{item['source']} · {item['pub'][:16]}_")
             st.markdown("---")
     else:
-        st.info("뉴스를 불러올 수 없습니다.")
+        with st.spinner("Gemini가 뉴스 분석 중..."):
+            analyzed = analyze_news_with_gemini(raw_news, display_name, news_api_key)
+
+        if analyzed:
+            impact_color = {"긍정": "#22c55e", "부정": "#ef4444", "중립": "#94a3b8"}
+            impact_icon  = {"긍정": "📈", "부정": "📉", "중립": "➡️"}
+            for i, item in enumerate(analyzed[:5]):
+                impact = item.get("impact","중립")
+                color  = impact_color.get(impact, "#94a3b8")
+                icon   = impact_icon.get(impact, "➡️")
+                # 원본 뉴스 링크 찾기
+                link = "#"
+                for rn in raw_news:
+                    if any(w in rn["title"] for w in item.get("title","").split()[:3]):
+                        link = rn["link"]
+                        break
+                st.markdown(f"""
+<div style="border:0.5px solid #1e293b;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#0f172a;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+    <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:2px 7px;border-radius:4px;">#{item.get('rank',i+1)}</span>
+    <span style="color:{color};font-size:12px;font-weight:500;">{icon} {impact}</span>
+  </div>
+  <a href="{link}" target="_blank" style="color:#e2e8f0;font-size:13px;font-weight:500;text-decoration:none;line-height:1.5;">
+    {item.get('title','')}
+  </a>
+  <p style="color:#64748b;font-size:12px;margin:6px 0 4px;">📌 {item.get('summary','')}</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.5;">💡 {item.get('reason','')}</p>
+</div>
+""", unsafe_allow_html=True)
+        else:
+            # 분석 실패 시 원본 표시
+            for item in raw_news[:5]:
+                st.markdown(f"**[{item['title']}]({item['link']})**  \n_{item['source']} · {item['pub'][:16]}_")
+                st.markdown("---")
 
 with col_ai:
     st.markdown("### 🤖 AI 주식 분석 (Gemini)")
