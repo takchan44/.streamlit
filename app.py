@@ -79,7 +79,7 @@ if "portfolio"       not in st.session_state: st.session_state.portfolio = []
 if "watchlist"       not in st.session_state: st.session_state.watchlist = ["005930.KS","000660.KS","035420.KS","005380.KS","068270.KS"]
 if "selected_ticker" not in st.session_state: st.session_state.selected_ticker = "005930.KS"
 if "kospi_loaded"    not in st.session_state: st.session_state.kospi_loaded = False
-if "chart_period"    not in st.session_state: st.session_state.chart_period = "3달"
+if "chart_period"    not in st.session_state: st.session_state.chart_period = "일"
 if "drawn_lines"     not in st.session_state: st.session_state.drawn_lines = []
 
 # ── 종목 로딩 ───────────────────────────────────────────
@@ -273,7 +273,7 @@ col_chart, col_port = st.columns([2, 1])
 # ── 차트 ────────────────────────────────────────────────
 with col_chart:
     # 기간 버튼
-    period_map = {"1주":"5d","1달":"1mo","3달":"3mo","6달":"6mo","1년":"1y","5년":"5y"}
+    period_map = {"일": "3mo", "주": "1y", "월": "5y", "년": "10y"}
     pcols = st.columns(len(period_map))
     for i, (label, _) in enumerate(period_map.items()):
         with pcols[i]:
@@ -282,6 +282,40 @@ with col_chart:
                 st.session_state.chart_period = label
                 st.rerun()
     plabel = st.session_state.chart_period
+    if plabel not in period_map:
+        st.session_state.chart_period = "일"
+        plabel = "일"
+
+    # 기간별 이동평균선 설정
+    # 일봉: 5·20·60·120일
+    # 주봉: 5·20·60·120주 → 실제 일수로 환산해서 동일 컬럼 사용
+    # 월봉·년봉도 동일 컬럼(5·20·60·120) 사용 — 데이터 포인트 기준
+    MA_SETTINGS = {
+        "일": [
+            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5일)"),
+            ("MA20",  20,  "#F5C518", 1.2, "MA20(20일)"),
+            ("MA60",  60,  "#C084FC", 1.2, "MA60(60일)"),
+            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120일)"),
+        ],
+        "주": [
+            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5주)"),
+            ("MA20",  20,  "#F5C518", 1.2, "MA20(20주)"),
+            ("MA60",  60,  "#C084FC", 1.2, "MA60(60주)"),
+            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120주)"),
+        ],
+        "월": [
+            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5개월)"),
+            ("MA20",  20,  "#F5C518", 1.2, "MA20(20개월)"),
+            ("MA60",  60,  "#C084FC", 1.2, "MA60(60개월)"),
+            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120개월)"),
+        ],
+        "년": [
+            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5년)"),
+            ("MA20",  20,  "#F5C518", 1.2, "MA20(20년)"),
+            ("MA60",  60,  "#C084FC", 1.2, "MA60(60년)"),
+            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120년)"),
+        ],
+    }
 
     # 옵션 체크박스
     opt1, opt2, opt3 = st.columns(3)
@@ -323,14 +357,23 @@ with col_chart:
             st.session_state.drawn_lines = []
             st.rerun()
 
-    hist = get_history(ticker_input, period_map[plabel])
+    hist_raw = get_history(ticker_input, period_map[plabel])
 
-    if not hist.empty:
-        hist = hist.copy()
-        hist["MA5"]   = hist["Close"].rolling(5).mean()
-        hist["MA20"]  = hist["Close"].rolling(20).mean()
-        hist["MA60"]  = hist["Close"].rolling(60).mean()
-        hist["MA120"] = hist["Close"].rolling(120).mean()
+    if not hist_raw.empty:
+        hist = hist_raw.copy()
+
+        # 주봉·월봉·년봉 리샘플링
+        if plabel == "주":
+            hist = hist.resample("W").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+        elif plabel == "월":
+            hist = hist.resample("ME").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+        elif plabel == "년":
+            hist = hist.resample("YE").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+
+        # 이동평균선 계산 (데이터 포인트 기준)
+        ma_cfg = MA_SETTINGS.get(plabel, MA_SETTINGS["일"])
+        for col, window, _, _, _ in ma_cfg:
+            hist[col] = hist["Close"].rolling(window).mean()
 
         # 매물대 계산
         NUM_VP = 15
@@ -376,21 +419,15 @@ with col_chart:
             hoverinfo="text+x",
         ))
 
-        # 이동평균선 (MA5·20·60·120)
+        # 이동평균선
         if show_ma:
-            ma_list = [
-                ("MA5",   "#FF6B35", 1.2),
-                ("MA20",  "#F5C518", 1.2),
-                ("MA60",  "#C084FC", 1.2),
-                ("MA120", "#FFFFFF", 1.5),  # 흰색 (다크배경 기준 검정처럼 선명)
-            ]
-            for col, color, width in ma_list:
+            for col, _, color, width, label in ma_cfg:
                 valid = hist[col].dropna()
                 if not valid.empty:
                     fig.add_trace(go.Scatter(
                         x=hist.index, y=hist[col], mode="lines",
-                        line=dict(color=color, width=width), name=col,
-                        hovertemplate=f"{col}: ₩%{{y:,.0f}}<extra></extra>"
+                        line=dict(color=color, width=width), name=label,
+                        hovertemplate=f"{label}: ₩%{{y:,.0f}}<extra></extra>"
                     ))
 
         # 매물대 — x_end 기준으로 왼쪽(-) 방향으로 그리기
@@ -446,7 +483,8 @@ with col_chart:
                     annotation_font=dict(size=10, color=ln["color"])
                 )
 
-        tick_fmt = "%m.%d" if plabel in ["1주","1달"] else "%y.%m"
+        tick_fmt_map = {"일": "%m.%d", "주": "%y.%m.%d", "월": "%y.%m", "년": "%Y"}
+        tick_fmt = tick_fmt_map.get(plabel, "%m.%d")
         fig.update_layout(
             height=500,
             margin=dict(l=0, r=90, t=10, b=0),
