@@ -1,5 +1,4 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -187,60 +186,126 @@ def hex_to_rgba(h, a):
     r,g,b = int(h[1:3],16),int(h[3:5],16),int(h[5:7],16)
     return f"rgba({r},{g},{b},{a})"
 
+# ── Yahoo Finance 직접 호출 (yfinance 라이브러리 없이) ──
+import urllib.request, json as _json, time as _time
+
+_YF_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://finance.yahoo.com",
+}
+
+def _yf_get(url, timeout=8):
+    try:
+        req = urllib.request.Request(url, headers=_YF_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return _json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return None
+
 @st.cache_data(ttl=60, show_spinner=False)
 def get_stock_info(ticker):
-    try:
-        t = yf.Ticker(ticker); info = t.info
-        if info.get("currentPrice") or info.get("regularMarketPrice"): return info
-        hist = t.history(period="5d")
-        if not hist.empty:
-            lc = float(hist["Close"].iloc[-1])
-            info["currentPrice"] = lc; info["regularMarketPrice"] = lc
-            if not info.get("regularMarketVolume"): info["regularMarketVolume"] = int(hist["Volume"].iloc[-1])
-            return info
-    except Exception: pass
-    try:
-        from pykrx import stock as krx
-        code = ticker.replace(".KS","").replace(".KQ","")
-        for i in range(5):
-            d = (datetime.today()-timedelta(days=i)).strftime("%Y%m%d")
-            df = krx.get_market_ohlcv_by_date(d,d,code)
-            if not df.empty:
-                row = df.iloc[-1]
-                return {"currentPrice":float(row["종가"]),"regularMarketPrice":float(row["종가"]),
-                        "regularMarketVolume":int(row["거래량"]),
-                        "regularMarketChangePercent":float(row.get("등락률",0)),
-                        "regularMarketChange":float(row["종가"]-row["시가"]),
-                        "fiftyTwoWeekHigh":0,"fiftyTwoWeekLow":0,"marketCap":0,"trailingPE":0,
-                        "longName":krx.get_market_ticker_name(code)}
-    except Exception: pass
+    # Yahoo Finance v8 quoteSummary API
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
+    data = _yf_get(url)
+    if data:
+        try:
+            meta = data["chart"]["result"][0]["meta"]
+            price  = meta.get("regularMarketPrice", 0)
+            prev   = meta.get("previousClose", price)
+            change = price - prev
+            chg_pct = (change / prev * 100) if prev else 0
+            hi52   = meta.get("fiftyTwoWeekHigh", 0)
+            lo52   = meta.get("fiftyTwoWeekLow", 0)
+            vol    = meta.get("regularMarketVolume", 0)
+            name   = meta.get("shortName") or meta.get("longName") or ticker
+            if price:
+                return {
+                    "currentPrice": price,
+                    "regularMarketPrice": price,
+                    "regularMarketChange": change,
+                    "regularMarketChangePercent": chg_pct,
+                    "regularMarketVolume": vol,
+                    "fiftyTwoWeekHigh": hi52,
+                    "fiftyTwoWeekLow": lo52,
+                    "marketCap": meta.get("marketCap", 0),
+                    "trailingPE": 0,
+                    "longName": name,
+                    "shortName": name,
+                }
+        except Exception:
+            pass
+
+    # 백업: v7 quote API
+    url2 = f"https://query2.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
+    data2 = _yf_get(url2)
+    if data2:
+        try:
+            q = data2["quoteResponse"]["result"][0]
+            price = q.get("regularMarketPrice", 0)
+            if price:
+                return {
+                    "currentPrice": price,
+                    "regularMarketPrice": price,
+                    "regularMarketChange": q.get("regularMarketChange", 0),
+                    "regularMarketChangePercent": q.get("regularMarketChangePercent", 0),
+                    "regularMarketVolume": q.get("regularMarketVolume", 0),
+                    "fiftyTwoWeekHigh": q.get("fiftyTwoWeekHigh", 0),
+                    "fiftyTwoWeekLow": q.get("fiftyTwoWeekLow", 0),
+                    "marketCap": q.get("marketCap", 0),
+                    "trailingPE": q.get("trailingPE", 0),
+                    "longName": q.get("longName") or q.get("shortName") or ticker,
+                    "shortName": q.get("shortName") or ticker,
+                }
+        except Exception:
+            pass
+
     return None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_history(ticker, period):
-    try:
-        h = yf.Ticker(ticker).history(period=period)
-        if not h.empty: return h
-    except Exception: pass
-    try:
-        from pykrx import stock as krx
-        code = ticker.replace(".KS","").replace(".KQ","")
-        days = {"5d":7,"1mo":30,"3mo":90,"6mo":180,"1y":365,"5y":1825,"10y":3650}.get(period,90)
-        end = datetime.today().strftime("%Y%m%d")
-        start = (datetime.today()-timedelta(days=days)).strftime("%Y%m%d")
-        df = krx.get_market_ohlcv_by_date(start,end,code)
-        if not df.empty:
-            df = df.rename(columns={"시가":"Open","고가":"High","저가":"Low","종가":"Close","거래량":"Volume"})
-            return df[["Open","High","Low","Close","Volume"]]
-    except Exception: pass
+    period_map = {"5d":"5d","1mo":"1mo","3mo":"3mo","6mo":"6mo","1y":"1y","5y":"5y","10y":"10y"}
+    interval_map = {"5d":"1d","1mo":"1d","3mo":"1d","6mo":"1d","1y":"1d","5y":"1wk","10y":"1mo"}
+    p = period_map.get(period, "3mo")
+    iv = interval_map.get(period, "1d")
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval={iv}&range={p}"
+    data = _yf_get(url)
+    if data:
+        try:
+            res    = data["chart"]["result"][0]
+            ts     = res["timestamp"]
+            ohlcv  = res["indicators"]["quote"][0]
+            opens  = ohlcv.get("open", [])
+            highs  = ohlcv.get("high", [])
+            lows   = ohlcv.get("low", [])
+            closes = ohlcv.get("close", [])
+            vols   = ohlcv.get("volume", [])
+            idx = pd.to_datetime(ts, unit="s", utc=True).tz_convert("Asia/Seoul")
+            df = pd.DataFrame({
+                "Open":   opens,
+                "High":   highs,
+                "Low":    lows,
+                "Close":  closes,
+                "Volume": vols,
+            }, index=idx)
+            df = df.dropna(subset=["Close"])
+            return df
+        except Exception:
+            pass
     return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_news(ticker):
-    try:
-        news = yf.Ticker(ticker).news
-        return news[:5] if news else []
-    except Exception: return []
+    # Yahoo Finance 뉴스 API
+    url = f"https://query1.finance.yahoo.com/v1/finance/search?q={ticker}&newsCount=5&quotesCount=0"
+    data = _yf_get(url)
+    if data:
+        try:
+            return data.get("news", [])[:5]
+        except Exception:
+            pass
+    return []
 
 # ── 사이드바 ────────────────────────────────────────────
 with st.sidebar:
@@ -355,7 +420,24 @@ st.markdown(f"## 📈 {display_name} ({code_display})")
 with st.spinner("데이터 불러오는 중..."):
     info = get_stock_info(ticker_input)
 if info is None:
-    st.error(f"**{display_name}** 데이터를 불러올 수 없습니다."); st.stop()
+    st.error(f"**{display_name} ({code_display})** 데이터를 불러올 수 없습니다.")
+    st.info(
+        "💡 **해결 방법:**\n"
+        "- 장 마감(오후 3:30) 후나 주말엔 일부 종목이 조회 안 될 수 있어요\n"
+        "- 검색창에서 종목코드 **6자리 숫자만** 입력해서 다시 조회해보세요\n"
+        f"- 현재 코드: `{code_display}` → 올바른 코드인지 확인해보세요"
+    )
+    # 다른 종목 빠른 선택
+    alt_tickers = ["005930.KS","000660.KS","035420.KS","005380.KS","068270.KS"]
+    st.markdown("**빠른 조회:**")
+    alt_cols = st.columns(len(alt_tickers))
+    for i, t in enumerate(alt_tickers):
+        n = TICKER_NAME_MAP.get(t, t.replace(".KS",""))
+        with alt_cols[i]:
+            if st.button(n, key=f"alt_{t}"):
+                st.session_state.selected_ticker = t
+                st.rerun()
+    st.stop()
 
 price   = info.get("currentPrice") or info.get("regularMarketPrice",0)
 chg_pct = info.get("regularMarketChangePercent",0)
