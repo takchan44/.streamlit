@@ -562,7 +562,7 @@ with col_chart:
     unit = {"일":"일","주":"주","월":"개월","년":"년"}[plabel]
 
     # ── 설정 탭 ──
-    tab_ma, tab_vp, tab_ind, tab_draw, tab_size = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기","📐 차트 크기"])
+    tab_ma, tab_vp, tab_ind, tab_draw = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기"])
 
     with tab_ma:
         st.caption("수치와 색상을 자유롭게 설정하세요")
@@ -626,33 +626,21 @@ with col_chart:
             if st.button(f"선 전체 삭제 ({len(st.session_state.drawn_lines)}개)", key="clear_lines"):
                 st.session_state.drawn_lines = []; st.rerun()
 
-    with tab_size:
-        st.caption("차트 높이와 레이아웃을 조절하세요")
-        chart_h = st.slider(
-            "메인 차트 높이 (px)",
-            min_value=300, max_value=1200,
-            value=st.session_state.chart_height,
-            step=50, key="chart_h_slider"
+    # ── 차트 크기 슬라이더 (탭 밖 — 즉시 반영) ──────────
+    with st.expander("📐 차트 크기 조절", expanded=False):
+        sz1, sz2, sz3 = st.columns(3)
+        st.session_state.chart_height = sz1.slider(
+            "메인 차트 높이", 300, 1200,
+            st.session_state.get("chart_height", 500), step=50, key="sl_chart_h"
         )
-        st.session_state.chart_height = chart_h
-
-        vol_h = st.slider(
-            "거래량 차트 높이 (px)",
-            min_value=40, max_value=200,
-            value=st.session_state.get("vol_height", 80),
-            step=10, key="vol_h_slider"
+        st.session_state.vol_height = sz2.slider(
+            "거래량 높이", 40, 200,
+            st.session_state.get("vol_height", 80), step=10, key="sl_vol_h"
         )
-        st.session_state.vol_height = vol_h
-
-        sub_h = st.slider(
-            "보조지표 차트 높이 (px)",
-            min_value=100, max_value=400,
-            value=st.session_state.get("sub_height", 160),
-            step=20, key="sub_h_slider"
+        st.session_state.sub_height = sz3.slider(
+            "보조지표 높이", 100, 400,
+            st.session_state.get("sub_height", 160), step=20, key="sl_sub_h"
         )
-        st.session_state.sub_height = sub_h
-
-        st.caption(f"현재 설정: 메인 {chart_h}px · 거래량 {vol_h}px · 보조지표 {sub_h}px")
 
     # ── 데이터 로딩 & 리샘플 ──
     hist_raw = get_history(ticker_input, period_map[plabel])
