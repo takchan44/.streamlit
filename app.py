@@ -4,14 +4,14 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import google.generativeai as genai
- 
+
 st.set_page_config(
     page_title="코스피 주식 대시보드",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
- 
+
 # ── 코스피 전 종목 불러오기 ─────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_kospi_stocks():
@@ -34,7 +34,7 @@ def load_kospi_stocks():
         pass
     # pykrx 실패 시 내장 목록 사용
     return BUILTIN_STOCKS
- 
+
 # 내장 코스피 종목 (pykrx 실패 대비)
 BUILTIN_STOCKS = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS",
@@ -78,7 +78,7 @@ BUILTIN_STOCKS = {
     "LG": "003550.KS", "SK": "034730.KS",
     "금호석유": "011780.KS", "코웨이": "021240.KS",
 }
- 
+
 # ── 세션 초기화 ─────────────────────────────────────────
 if "portfolio" not in st.session_state:
     st.session_state.portfolio = []
@@ -88,7 +88,7 @@ if "selected_ticker" not in st.session_state:
     st.session_state.selected_ticker = "005930.KS"
 if "kospi_loaded" not in st.session_state:
     st.session_state.kospi_loaded = False
- 
+
 # ── 종목 리스트 로딩 ────────────────────────────────────
 if not st.session_state.kospi_loaded:
     with st.spinner("코스피 전 종목 불러오는 중..."):
@@ -97,15 +97,15 @@ if not st.session_state.kospi_loaded:
         st.session_state.kospi_loaded = True
 else:
     KOSPI_STOCKS = st.session_state.get("kospi_stocks", BUILTIN_STOCKS)
- 
+
 TICKER_NAME_MAP = {v: k for k, v in KOSPI_STOCKS.items()}
- 
+
 # ── 유틸 함수 ───────────────────────────────────────────
 def format_price(price):
     if not price:
         return "N/A"
     return f"₩{int(price):,}"
- 
+
 def format_cap(val):
     if not val:
         return "N/A"
@@ -114,26 +114,89 @@ def format_cap(val):
     elif val >= 1e8:
         return f"{val/1e8:.0f}억"
     return f"{val/1e9:.1f}B"
- 
+
 # ── 데이터 함수 ─────────────────────────────────────────
 @st.cache_data(ttl=60, show_spinner=False)
 def get_stock_info(ticker: str):
     try:
-        info = yf.Ticker(ticker).info
-        # 유효한 데이터인지 확인
-        if info and (info.get("currentPrice") or info.get("regularMarketPrice")):
+        t = yf.Ticker(ticker)
+        info = t.info
+
+        # currentPrice 또는 regularMarketPrice 확인
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if price:
             return info
-        return None
+
+        # yfinance history로 보완
+        hist = t.history(period="5d")
+        if not hist.empty:
+            last_close = float(hist["Close"].iloc[-1])
+            info["currentPrice"] = last_close
+            info["regularMarketPrice"] = last_close
+            if not info.get("regularMarketVolume"):
+                info["regularMarketVolume"] = int(hist["Volume"].iloc[-1])
+            return info
+
     except Exception:
-        return None
- 
+        pass
+
+    # yfinance 완전 실패 시 pykrx로 폴백
+    try:
+        from pykrx import stock as krx
+        code = ticker.replace(".KS", "").replace(".KQ", "")
+        from datetime import timedelta
+        for i in range(5):
+            d = (datetime.today() - timedelta(days=i)).strftime("%Y%m%d")
+            df = krx.get_market_ohlcv_by_date(d, d, code)
+            if not df.empty:
+                row = df.iloc[-1]
+                close = float(row["종가"])
+                volume = int(row["거래량"])
+                # 기본 info 구조 반환
+                return {
+                    "currentPrice": close,
+                    "regularMarketPrice": close,
+                    "regularMarketVolume": volume,
+                    "regularMarketChangePercent": float(row.get("등락률", 0)),
+                    "regularMarketChange": float(row["종가"] - row["시가"]),
+                    "fiftyTwoWeekHigh": 0,
+                    "fiftyTwoWeekLow": 0,
+                    "marketCap": 0,
+                    "trailingPE": 0,
+                    "longName": krx.get_market_ticker_name(code),
+                }
+    except Exception:
+        pass
+
+    return None
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_history(ticker: str, period: str):
     try:
-        return yf.Ticker(ticker).history(period=period)
+        hist = yf.Ticker(ticker).history(period=period)
+        if not hist.empty:
+            return hist
     except Exception:
-        return pd.DataFrame()
- 
+        pass
+
+    # pykrx 폴백
+    try:
+        from pykrx import stock as krx
+        from datetime import timedelta
+        code = ticker.replace(".KS", "").replace(".KQ", "")
+        period_days = {"5d": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "5y": 1825}
+        days = period_days.get(period, 90)
+        end = datetime.today().strftime("%Y%m%d")
+        start = (datetime.today() - timedelta(days=days)).strftime("%Y%m%d")
+        df = krx.get_market_ohlcv_by_date(start, end, code)
+        if not df.empty:
+            df = df.rename(columns={"시가": "Open", "고가": "High", "저가": "Low", "종가": "Close", "거래량": "Volume"})
+            return df[["Open", "High", "Low", "Close", "Volume"]]
+    except Exception:
+        pass
+
+    return pd.DataFrame()
+
 @st.cache_data(ttl=600, show_spinner=False)
 def get_news(ticker: str):
     try:
@@ -141,14 +204,14 @@ def get_news(ticker: str):
         return news[:5] if news else []
     except Exception:
         return []
- 
+
 # ── 사이드바 ────────────────────────────────────────────
 with st.sidebar:
     st.markdown(f"### 🔍 종목 검색")
     st.caption(f"총 {len(KOSPI_STOCKS):,}개 종목")
- 
+
     search_query = st.text_input("종목명 또는 코드", placeholder="삼성, 005930...")
- 
+
     if search_query:
         q = search_query.strip().upper()
         results = {
@@ -172,7 +235,7 @@ with st.sidebar:
         # 현재 선택된 종목 기본값 설정
         current_name = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
         default_idx = names.index(current_name) if current_name in names else 0
- 
+
         sel = st.selectbox(
             "전체 종목",
             options=names,
@@ -182,7 +245,7 @@ with st.sidebar:
         if st.button("조회", use_container_width=True, key="btn_list"):
             st.session_state.selected_ticker = KOSPI_STOCKS[sel]
             st.rerun()
- 
+
     st.markdown("---")
     st.markdown("### ⭐ 관심 종목")
     to_remove = None
@@ -209,7 +272,7 @@ with st.sidebar:
     if to_remove:
         st.session_state.watchlist.remove(to_remove)
         st.rerun()
- 
+
     st.markdown("---")
     st.caption("관심 종목 추가")
     wq = st.text_input("검색", placeholder="삼성전자, 005930", key="wq")
@@ -228,22 +291,22 @@ with st.sidebar:
                 if wt and wt not in st.session_state.watchlist:
                     st.session_state.watchlist.append(wt)
                     st.rerun()
- 
+
 # ── 메인 화면 ───────────────────────────────────────────
 ticker_input = st.session_state.selected_ticker
 display_name = TICKER_NAME_MAP.get(ticker_input, ticker_input.replace(".KS", ""))
 code_display = ticker_input.replace(".KS", "")
- 
+
 st.markdown(f"## 📈 {display_name} ({code_display})")
- 
+
 with st.spinner("데이터 불러오는 중..."):
     info = get_stock_info(ticker_input)
- 
+
 if info is None:
     st.error(f"**{display_name}** 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.")
     st.info("💡 장 마감 후나 주말에는 일부 종목 데이터가 제한될 수 있습니다.")
     st.stop()
- 
+
 price   = info.get("currentPrice") or info.get("regularMarketPrice", 0)
 chg_pct = info.get("regularMarketChangePercent", 0)
 mkt_cap = info.get("marketCap", 0)
@@ -252,7 +315,7 @@ high_52 = info.get("fiftyTwoWeekHigh", 0)
 low_52  = info.get("fiftyTwoWeekLow", 0)
 pe      = info.get("trailingPE", 0)
 name    = info.get("longName") or info.get("shortName", display_name)
- 
+
 c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("현재가", format_price(price), f"{chg_pct:+.2f}%")
 c2.metric("시가총액", format_cap(mkt_cap))
@@ -260,11 +323,11 @@ c3.metric("거래량", f"{volume/1e4:.0f}만주" if volume else "N/A")
 c4.metric("52주 최고", format_price(high_52) if high_52 else "N/A")
 c5.metric("52주 최저", format_price(low_52) if low_52 else "N/A")
 c6.metric("P/E 비율", f"{pe:.1f}" if pe else "N/A")
- 
+
 st.markdown("---")
- 
+
 col_chart, col_port = st.columns([2, 1])
- 
+
 with col_chart:
     st.markdown("### 주가 차트")
     period_map = {"1주": "5d", "1달": "1mo", "3달": "3mo", "6달": "6mo", "1년": "1y", "5년": "5y"}
@@ -290,7 +353,7 @@ with col_chart:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("차트 데이터를 불러올 수 없습니다.")
- 
+
 with col_port:
     st.markdown("### 💼 포트폴리오")
     with st.form("add_portfolio"):
@@ -304,7 +367,7 @@ with col_port:
                 "ticker": code, "shares": p_shares, "avg_price": p_price
             })
             st.rerun()
- 
+
     if st.session_state.portfolio:
         total_invest = total_value = 0
         rows = []
@@ -334,11 +397,11 @@ with col_port:
             st.rerun()
     else:
         st.info("종목을 추가해보세요.")
- 
+
 st.markdown("---")
- 
+
 col_news, col_ai = st.columns([1, 1])
- 
+
 with col_news:
     st.markdown("### 📰 관련 뉴스")
     news = get_news(ticker_input)
@@ -353,17 +416,17 @@ with col_news:
             st.markdown("---")
     else:
         st.info("뉴스를 불러올 수 없습니다.")
- 
+
 with col_ai:
     st.markdown("### 🤖 AI 주식 분석 (Gemini)")
     try:
         api_key = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
         api_key = ""
- 
+
     question = st.text_area("질문 입력",
         placeholder=f"예: {display_name} 지금 매수하기 좋은 타이밍인가요?", height=100)
- 
+
     if st.button("AI 분석 요청 ↗", use_container_width=True):
         if not api_key:
             st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정해주세요.")
