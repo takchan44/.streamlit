@@ -929,45 +929,83 @@ with col_news:
     try: news_api_key = st.secrets.get("GEMINI_API_KEY","")
     except Exception: news_api_key=""
 
-    @st.cache_data(ttl=300, show_spinner=False)
-    def get_ai_news(stock_name, ticker, api_key):
-        """Gemini 웹 검색으로 최신 뉴스 수집 + 분석"""
+    @st.cache_data(ttl=600, show_spinner=False)
+    def get_ai_news_with_search(stock_name, ticker, api_key):
+        """Gemini Google Search Tool로 실제 최신 뉴스 검색 + 분석"""
         if not api_key:
             return None
+        import json, re
         try:
             import google.generativeai as genai2
+            import google.generativeai.types as gtypes
             genai2.configure(api_key=api_key)
-            model = genai2.GenerativeModel("gemini-1.5-flash")
 
-            is_kr = ticker.endswith(".KS") or ticker.endswith(".KQ")
-            lang  = "한국어" if is_kr else "영어"
-            today = datetime.today().strftime("%Y년 %m월 %d일")
+            is_kr   = ticker.endswith(".KS") or ticker.endswith(".KQ")
+            lang    = "한국어" if is_kr else "영어"
+            code    = ticker.replace(".KS","").replace(".KQ","")
+            today   = datetime.today().strftime("%Y년 %m월 %d일")
+            search_q = f"{stock_name} {code} 주식 뉴스" if is_kr else f"{stock_name} {code} stock news"
 
-            prompt = f"""
-오늘은 {today}입니다.
-'{stock_name}({ticker.replace(".KS","").replace(".KQ","")})' 종목과 관련된 최신 뉴스와 시장 동향을 바탕으로,
-투자자가 주목해야 할 중요 정보 5가지를 {lang}로 작성해주세요.
+            # google_search tool 사용 (Gemini 1.5 Flash)
+            try:
+                model = genai2.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    tools=["google_search_retrieval"],
+                )
+                prompt = f"""오늘은 {today}입니다.
+구글 뉴스에서 '{search_q}' 를 검색해서 최신 뉴스를 찾아주세요.
 
-각 항목은 아래 JSON 형식으로 출력하세요. JSON 외 다른 텍스트는 절대 포함하지 마세요.
+검색 결과를 바탕으로 투자자가 주목해야 할 뉴스 최대 5개를 선별하고,
+각 뉴스에 대해 아래 JSON 배열 형식으로만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
 
 [
   {{
     "rank": 1,
-    "title": "뉴스/이슈 제목 (간략히, 30자 이내)",
-    "summary": "핵심 내용 한 줄 요약 (50자 이내)",
+    "title": "실제 뉴스 제목 (40자 이내)",
+    "source": "뉴스 출처 (언론사명)",
+    "date": "날짜 (MM/DD 형식)",
+    "summary": "뉴스 핵심 내용 요약 (60자 이내)",
     "impact": "긍정 또는 부정 또는 중립",
-    "reason": "투자자가 주목해야 하는 구체적 이유 (1~2문장)",
+    "outlook": "이 뉴스가 주가에 미치는 영향과 향후 전망 (2~3문장)",
     "category": "실적 또는 기술 또는 규제 또는 시장 또는 경쟁 또는 배당 또는 기타"
-  }},
-  ...총 5개
-]
-"""
-            import json, re
-            resp = model.generate_content(prompt)
-            text = resp.text.strip()
-            match = re.search(r'\[.*?\]', text, re.DOTALL)
-            if match:
-                return json.loads(match.group())
+  }}
+]"""
+                resp = model.generate_content(prompt)
+                text = resp.text.strip()
+                match = re.search(r'\[.*\]', text, re.DOTALL)
+                if match:
+                    items = json.loads(match.group())
+                    if items and len(items) > 0:
+                        return {"items": items, "method": "search"}
+            except Exception:
+                pass
+
+            # fallback: 웹 검색 없이 Gemini 자체 지식으로 분석
+            model2 = genai2.GenerativeModel("gemini-1.5-flash")
+            prompt2 = f"""오늘은 {today}입니다.
+'{stock_name}({code})' 종목의 최근 주요 뉴스와 이슈를 바탕으로
+투자자가 주목해야 할 정보 5가지를 {lang}로 분석해주세요.
+
+반드시 아래 JSON 배열 형식으로만 출력하세요.
+[
+  {{
+    "rank": 1,
+    "title": "뉴스/이슈 제목 (40자 이내)",
+    "source": "출처",
+    "date": "최근",
+    "summary": "핵심 내용 (60자 이내)",
+    "impact": "긍정 또는 부정 또는 중립",
+    "outlook": "주가 영향 및 향후 전망 (2~3문장)",
+    "category": "실적 또는 기술 또는 규제 또는 시장 또는 경쟁 또는 배당 또는 기타"
+  }}
+]"""
+            resp2 = model2.generate_content(prompt2)
+            text2 = resp2.text.strip()
+            match2 = re.search(r'\[.*\]', text2, re.DOTALL)
+            if match2:
+                items2 = json.loads(match2.group())
+                if items2:
+                    return {"items": items2, "method": "knowledge"}
         except Exception:
             pass
         return None
@@ -975,38 +1013,51 @@ with col_news:
     if not news_api_key:
         st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정하면 AI 뉴스 분석을 볼 수 있어요.")
     else:
-        with st.spinner("Gemini가 최신 뉴스 분석 중..."):
-            analyzed = get_ai_news(display_name, ticker_input, news_api_key)
+        with st.spinner(f"Gemini가 {display_name} 최신 뉴스 검색 중..."):
+            result = get_ai_news_with_search(display_name, ticker_input, news_api_key)
 
-        if analyzed:
+        if result:
+            items   = result.get("items", [])
+            method  = result.get("method", "knowledge")
             impact_cfg = {
-                "긍정": ("#22c55e", "#052e16", "📈"),
-                "부정": ("#ef4444", "#2d0a0a", "📉"),
-                "중립": ("#94a3b8", "#0f172a", "➡️"),
+                "긍정": ("#22c55e", "rgba(34,197,94,0.1)",  "📈"),
+                "부정": ("#ef4444", "rgba(239,68,68,0.1)",  "📉"),
+                "중립": ("#94a3b8", "rgba(148,163,184,0.08)","➡️"),
             }
             cat_colors = {
                 "실적":"#3b82f6","기술":"#8b5cf6","규제":"#f59e0b",
                 "시장":"#06b6d4","경쟁":"#ec4899","배당":"#10b981","기타":"#64748b"
             }
-            for item in analyzed[:5]:
-                impact  = item.get("impact","중립")
-                txt_c, bg_c, icon = impact_cfg.get(impact, ("#94a3b8","#0f172a","➡️"))
-                cat     = item.get("category","기타")
-                cat_c   = cat_colors.get(cat,"#64748b")
+            for item in items[:5]:
+                impact       = item.get("impact","중립")
+                txt_c, bg_c, icon = impact_cfg.get(impact, ("#94a3b8","rgba(148,163,184,0.08)","➡️"))
+                cat          = item.get("category","기타")
+                cat_c        = cat_colors.get(cat,"#64748b")
+                source       = item.get("source","")
+                date_str     = item.get("date","")
+                outlook      = item.get("outlook","")
                 st.markdown(f"""
-<div style="border:0.5px solid #1e293b;border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#0d1526;">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-    <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;">#{item.get('rank',1)}</span>
-    <span style="background:{cat_c}22;color:{cat_c};font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;">{cat}</span>
-    <span style="background:{bg_c};color:{txt_c};font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;">{icon} {impact}</span>
+<div style="border:1px solid rgba(30,41,59,0.8);border-radius:10px;padding:14px 16px;margin-bottom:12px;background:#0d1526;">
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+    <span style="background:#1e293b;color:#64748b;font-size:10px;padding:2px 7px;border-radius:20px;">#{item.get('rank',1)}</span>
+    <span style="background:{cat_c}22;color:{cat_c};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;">{cat}</span>
+    <span style="background:{bg_c};color:{txt_c};font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;">{icon} {impact}</span>
+    {f'<span style="color:#475569;font-size:10px;margin-left:auto;">{source} · {date_str}</span>' if source else ''}
   </div>
-  <p style="color:#e2e8f0;font-size:13px;font-weight:600;margin:0 0 6px;line-height:1.5;">{item.get('title','')}</p>
-  <p style="color:#64748b;font-size:12px;margin:0 0 6px;">📌 {item.get('summary','')}</p>
-  <p style="color:#94a3b8;font-size:11px;margin:0;line-height:1.6;border-left:2px solid #1e40af;padding-left:8px;">💡 {item.get('reason','')}</p>
+  <p style="color:#e2e8f0;font-size:13px;font-weight:600;margin:0 0 5px;line-height:1.5;">{item.get('title','')}</p>
+  <p style="color:#64748b;font-size:11px;margin:0 0 8px;">📌 {item.get('summary','')}</p>
+  <div style="background:rgba(30,64,175,0.12);border-left:2px solid #3b82f6;border-radius:0 6px 6px 0;padding:8px 10px;">
+    <p style="color:#93c5fd;font-size:11px;margin:0;line-height:1.7;">🔭 <strong>전망:</strong> {outlook}</p>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-            st.caption(f"🤖 Gemini AI 분석 · {datetime.today().strftime('%m/%d %H:%M')} 기준")
+            src_label = "구글 검색 기반" if method=="search" else "AI 분석 기반"
+            st.caption(f"🤖 Gemini · {src_label} · {datetime.today().strftime('%m/%d %H:%M')} 기준")
+
+            if st.button("🔄 뉴스 다시 분석", key="refresh_news"):
+                get_ai_news_with_search.clear()
+                st.rerun()
         else:
             st.error("뉴스 분석에 실패했습니다. 잠시 후 다시 시도해주세요.")
 
