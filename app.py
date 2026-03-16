@@ -1114,7 +1114,7 @@ with col_ai:
                     _history_text = ""
                     for _h in st.session_state.chat_history[:-1][-6:]:  # 최근 6개만
                         _role = "사용자" if _h["role"]=="user" else "AI"
-                        _history_text += f"{_role}: {_h['content']}
+                        _history_text += _role + ": " + _h["content"] + "\n"
 "
                     _full_prompt = f"{_history_text}사용자: {_question.strip()}"
                     _resp = _model.generate_content(_full_prompt)
