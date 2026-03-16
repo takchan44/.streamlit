@@ -949,7 +949,7 @@ with col_news:
             # google_search tool 사용 (Gemini 1.5 Flash)
             try:
                 model = genai2.GenerativeModel(
-                    model_name="gemini-1.5-flash",
+                    model_name="gemini-2.0-flash",
                     tools=["google_search_retrieval"],
                 )
                 prompt = f"""오늘은 {today}입니다.
@@ -981,7 +981,7 @@ with col_news:
                 pass
 
             # fallback: 웹 검색 없이 Gemini 자체 지식으로 분석
-            model2 = genai2.GenerativeModel("gemini-1.5-flash")
+            model2 = genai2.GenerativeModel("gemini-2.0-flash")
             prompt2 = f"""오늘은 {today}입니다.
 '{stock_name}({code})' 종목의 최근 주요 뉴스와 이슈를 바탕으로
 투자자가 주목해야 할 정보 5가지를 {lang}로 분석해주세요.
@@ -1064,7 +1064,7 @@ with col_news:
             try:
                 import google.generativeai as genai2
                 genai2.configure(api_key=news_api_key)
-                model_test = genai2.GenerativeModel("gemini-1.5-flash")
+                model_test = genai2.GenerativeModel("gemini-2.0-flash")
                 test_resp = model_test.generate_content("안녕하세요. 테스트입니다.")
                 st.info(f"✅ Gemini 연결 성공: {test_resp.text[:50]}")
             except Exception as e:
@@ -1092,7 +1092,7 @@ P/E: {f"{pe:.1f}" if pe else "N/A"}
             with st.spinner("Gemini가 분석 중..."):
                 try:
                     genai.configure(api_key=api_key)
-                    model=genai.GenerativeModel(model_name="gemini-1.5-flash",
+                    model=genai.GenerativeModel(model_name="gemini-2.0-flash",
                         system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요.")
                     resp=model.generate_content(f"주식 데이터:\n{ss}\n\n질문: {question}")
                     st.success(resp.text)
