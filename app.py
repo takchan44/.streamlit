@@ -1059,7 +1059,16 @@ with col_news:
                 get_ai_news_with_search.clear()
                 st.rerun()
         else:
-            st.error("뉴스 분석에 실패했습니다. 잠시 후 다시 시도해주세요.")
+            st.error("뉴스 분석에 실패했습니다.")
+            # 디버그: 직접 오류 확인
+            try:
+                import google.generativeai as genai2
+                genai2.configure(api_key=news_api_key)
+                model_test = genai2.GenerativeModel("gemini-1.5-flash")
+                test_resp = model_test.generate_content("안녕하세요. 테스트입니다.")
+                st.info(f"✅ Gemini 연결 성공: {test_resp.text[:50]}")
+            except Exception as e:
+                st.warning(f"❌ Gemini 오류: {str(e)}")
 
 with col_ai:
     st.markdown("### 🤖 AI 주식 분석 (Gemini)")
