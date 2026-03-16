@@ -143,7 +143,7 @@ if "ma_settings"     not in st.session_state:
     ]
 if "vp_settings" not in st.session_state:
     st.session_state.vp_settings = {"bins":15,"color_above":"#3182F6","color_below":"#5BA3F5","show":True}
-if "indicators"  not in st.session_state: st.session_state.indicators = []
+if "chart_height"  not in st.session_state: st.session_state.chart_height = 500
 
 # ── 종목 로딩 ───────────────────────────────────────────
 if not st.session_state.kospi_loaded:
@@ -562,7 +562,7 @@ with col_chart:
     unit = {"일":"일","주":"주","월":"개월","년":"년"}[plabel]
 
     # ── 설정 탭 ──
-    tab_ma, tab_vp, tab_ind, tab_draw = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기"])
+    tab_ma, tab_vp, tab_ind, tab_draw, tab_size = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기","📐 차트 크기"])
 
     with tab_ma:
         st.caption("수치와 색상을 자유롭게 설정하세요")
@@ -625,6 +625,34 @@ with col_chart:
         if st.session_state.drawn_lines:
             if st.button(f"선 전체 삭제 ({len(st.session_state.drawn_lines)}개)", key="clear_lines"):
                 st.session_state.drawn_lines = []; st.rerun()
+
+    with tab_size:
+        st.caption("차트 높이와 레이아웃을 조절하세요")
+        chart_h = st.slider(
+            "메인 차트 높이 (px)",
+            min_value=300, max_value=1200,
+            value=st.session_state.chart_height,
+            step=50, key="chart_h_slider"
+        )
+        st.session_state.chart_height = chart_h
+
+        vol_h = st.slider(
+            "거래량 차트 높이 (px)",
+            min_value=40, max_value=200,
+            value=st.session_state.get("vol_height", 80),
+            step=10, key="vol_h_slider"
+        )
+        st.session_state.vol_height = vol_h
+
+        sub_h = st.slider(
+            "보조지표 차트 높이 (px)",
+            min_value=100, max_value=400,
+            value=st.session_state.get("sub_height", 160),
+            step=20, key="sub_h_slider"
+        )
+        st.session_state.sub_height = sub_h
+
+        st.caption(f"현재 설정: 메인 {chart_h}px · 거래량 {vol_h}px · 보조지표 {sub_h}px")
 
     # ── 데이터 로딩 & 리샘플 ──
     hist_raw = get_history(ticker_input, period_map[plabel])
@@ -755,8 +783,9 @@ with col_chart:
                     hovertemplate=f"{format_price(ln['y'])}<extra>수평선</extra>"))
 
         tf = {"일":"%m.%d","주":"%y.%m.%d","월":"%y.%m","년":"%Y"}.get(plabel,"%m.%d")
+        chart_height = st.session_state.get("chart_height", 500)
         fig.update_layout(
-            height=500,margin=dict(l=0,r=90,t=10,b=0),
+            height=chart_height,margin=dict(l=0,r=90,t=10,b=0),
             plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(showgrid=False,zeroline=False,showline=False,
                        tickfont=dict(size=11,color="#666"),tickformat=tf,rangeslider=dict(visible=False)),
@@ -771,11 +800,12 @@ with col_chart:
             "displaylogo":False,"scrollZoom":True})
 
         # 거래량
+        vol_height = st.session_state.get("vol_height", 80)
         vc=[UP if c>=o else DN for c,o in zip(hist["Close"],hist["Open"])]
         fv=go.Figure()
         fv.add_trace(go.Bar(x=hist.index,y=hist["Volume"],marker_color=vc,
             hovertemplate="<b>%{x|%Y.%m.%d}</b><br>%{y:,.0f}주<extra></extra>"))
-        fv.update_layout(height=80,margin=dict(l=0,r=90,t=0,b=0),
+        fv.update_layout(height=vol_height,margin=dict(l=0,r=90,t=0,b=0),
             plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(showgrid=False,showticklabels=False,zeroline=False),
             yaxis=dict(showgrid=False,showticklabels=False,zeroline=False,side="right"),
@@ -783,7 +813,8 @@ with col_chart:
         st.plotly_chart(fv,use_container_width=True,config={"displayModeBar":False})
 
         # ── 보조지표 서브차트 ──
-        def sub_layout(h=160):
+        def sub_layout(h=None):
+            h = h or st.session_state.get("sub_height", 160)
             return dict(height=h,margin=dict(l=0,r=90,t=24,b=0),
                 plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(showgrid=False,zeroline=False,showline=False,
