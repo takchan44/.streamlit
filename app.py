@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+import google.generativeai as genai
  
 st.set_page_config(
     page_title="코스피 주식 대시보드",
@@ -354,9 +355,9 @@ with col_news:
         st.info("뉴스를 불러올 수 없습니다.")
  
 with col_ai:
-    st.markdown("### 🤖 AI 주식 분석")
+    st.markdown("### 🤖 AI 주식 분석 (Gemini)")
     try:
-        api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+        api_key = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
         api_key = ""
  
@@ -365,11 +366,10 @@ with col_ai:
  
     if st.button("AI 분석 요청 ↗", use_container_width=True):
         if not api_key:
-            st.warning("Streamlit Cloud Secrets에 ANTHROPIC_API_KEY를 설정해주세요.")
+            st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정해주세요.")
         elif not question.strip():
             st.warning("질문을 입력해주세요.")
         else:
-            import anthropic
             port_summary = ", ".join([
                 f"{TICKER_NAME_MAP.get(p['ticker'], p['ticker'].replace('.KS',''))} {p['shares']}주"
                 for p in st.session_state.portfolio
@@ -381,15 +381,16 @@ with col_ai:
 P/E: {f"{pe:.1f}" if pe else "N/A"}
 52주 범위: {format_price(low_52)} ~ {format_price(high_52)}
 포트폴리오: {port_summary}"""
-            with st.spinner("Claude가 분석 중..."):
+            with st.spinner("Gemini가 분석 중..."):
                 try:
-                    client = anthropic.Anthropic(api_key=api_key)
-                    msg = client.messages.create(
-                        model="claude-sonnet-4-20250514",
-                        max_tokens=1024,
-                        system="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요.",
-                        messages=[{"role": "user", "content": f"주식 데이터:\n{stock_summary}\n\n질문: {question}"}]
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel(
+                        model_name="gemini-1.5-flash",
+                        system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요."
                     )
-                    st.success(msg.content[0].text)
+                    response = model.generate_content(
+                        f"주식 데이터:\n{stock_summary}\n\n질문: {question}"
+                    )
+                    st.success(response.text)
                 except Exception as e:
                     st.error(f"오류 발생: {e}")
