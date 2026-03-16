@@ -404,19 +404,7 @@ with st.sidebar:
             if st.button("✕", key=f"del_{wt}"): to_remove = wt
     if to_remove:
         st.session_state.watchlist.remove(to_remove); st.rerun()
-    st.markdown("---")
-    st.caption("관심 종목 추가")
-    wq = st.text_input("검색", placeholder="삼성전자, AAPL, 005930", key="wq")
-    if wq:
-        wqr = {n:t for n,t in ALL_STOCKS.items()
-               if wq.upper() in n.upper() or wq.upper() in t.upper().replace(".KS","")}
-        if wqr:
-            wpick = st.selectbox("선택", list(wqr.keys()), key="wpick",
-                                 format_func=lambda x: f"{'🇰🇷' if wqr[x].endswith('.KS') else '🇺🇸'} {x} ({wqr[x].replace('.KS','')})")
-            if st.button("관심 추가", use_container_width=True):
-                wt = wqr.get(wpick)
-                if wt and wt not in st.session_state.watchlist:
-                    st.session_state.watchlist.append(wt); st.rerun()
+
 
 # ── 메인 ────────────────────────────────────────────────
 ticker_input = st.session_state.selected_ticker
@@ -427,8 +415,6 @@ is_korean    = ticker_input.endswith(".KS") or ticker_input.endswith(".KQ")
 def fmt_p(p):
     if not p: return "N/A"
     return f"₩{int(p):,}" if is_korean else f"${p:,.2f}"
-
-st.markdown(f"## 📈 {display_name} ({code_display})")
 
 # ── 실시간 지수 티커 바 ──────────────────────────────────
 @st.cache_data(ttl=60, show_spinner=False)
@@ -518,6 +504,21 @@ st.markdown(f"""
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+# ── 종목 헤더 + ⭐ 관심종목 버튼 ────────────────────────────
+_hcol1, _hcol2 = st.columns([10, 1])
+with _hcol1:
+    st.markdown(f"## 📈 {display_name} ({code_display})")
+with _hcol2:
+    _in_watch = ticker_input in st.session_state.watchlist
+    _star_label = "⭐" if _in_watch else "☆"
+    _star_help  = "관심종목 제거" if _in_watch else "관심종목 추가"
+    if st.button(_star_label, key="btn_star", help=_star_help, use_container_width=True):
+        if _in_watch:
+            st.session_state.watchlist.remove(ticker_input)
+        else:
+            st.session_state.watchlist.append(ticker_input)
+        st.rerun()
 
 with st.spinner("데이터 불러오는 중..."):
     info = get_stock_info(ticker_input)
