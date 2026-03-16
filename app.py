@@ -417,6 +417,95 @@ def fmt_p(p):
 
 st.markdown(f"## 📈 {display_name} ({code_display})")
 
+# ── 실시간 지수 티커 바 ──────────────────────────────────
+@st.cache_data(ttl=60, show_spinner=False)
+def get_market_indices():
+    symbols = {
+        "코스피":  "^KS11",
+        "코스닥":  "^KQ11",
+        "나스닥":  "^IXIC",
+        "S&P500": "^GSPC",
+        "다우":    "^DJI",
+        "달러/원": "KRW=X",
+        "엔/원":   "JPYKRW=X",
+        "금":      "GC=F",
+        "WTI유가": "CL=F",
+    }
+    results = {}
+    for name, sym in symbols.items():
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=2d"
+        data = _yf_get(url)
+        if data:
+            try:
+                meta = data["chart"]["result"][0]["meta"]
+                price = meta.get("regularMarketPrice", 0)
+                prev  = meta.get("previousClose", price)
+                chg   = ((price - prev) / prev * 100) if prev else 0
+                results[name] = {"price": price, "chg": chg, "sym": sym}
+            except Exception:
+                pass
+    return results
+
+indices = get_market_indices()
+
+# 티커 아이템 HTML 생성
+ticker_items = []
+for idx_name, val in indices.items():
+    p = val["price"]
+    c = val["chg"]
+    color = "#22c55e" if c >= 0 else "#ef4444"
+    sign  = "▲" if c >= 0 else "▼"
+    if idx_name in ["달러/원", "엔/원"]:
+        p_str = f"{p:,.2f}"
+    elif idx_name in ["금", "WTI유가"]:
+        p_str = f"${p:,.2f}"
+    elif idx_name in ["코스피", "코스닥"]:
+        p_str = f"{p:,.2f}"
+    else:
+        p_str = f"{p:,.2f}"
+    item = (
+        f'<span style="margin:0 32px;white-space:nowrap;">'
+        f'<span style="color:#94a3b8;font-size:13px;">{idx_name}</span> '
+        f'<span style="color:#f1f5f9;font-size:13px;font-weight:500;">{p_str}</span> '
+        f'<span style="color:{color};font-size:12px;">{sign}{abs(c):.2f}%</span>'
+        f'</span>'
+    )
+    ticker_items.append(item)
+
+# 2번 반복해서 끊김 없이 스크롤
+ticker_content = "".join(ticker_items * 2)
+
+st.markdown(f"""
+<style>
+.ticker-wrap {{
+    width: 100%;
+    overflow: hidden;
+    background: #0f172a;
+    border: 0.5px solid #1e293b;
+    border-radius: 8px;
+    padding: 10px 0;
+    margin-bottom: 16px;
+}}
+.ticker-track {{
+    display: inline-flex;
+    animation: ticker-scroll 30s linear infinite;
+    white-space: nowrap;
+}}
+.ticker-wrap:hover .ticker-track {{
+    animation-play-state: paused;
+}}
+@keyframes ticker-scroll {{
+    0%   {{ transform: translateX(0); }}
+    100% {{ transform: translateX(-50%); }}
+}}
+</style>
+<div class="ticker-wrap">
+  <div class="ticker-track">
+    {ticker_content}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 with st.spinner("데이터 불러오는 중..."):
     info = get_stock_info(ticker_input)
 if info is None:
