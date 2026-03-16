@@ -561,6 +561,15 @@ low_52  = info.get("fiftyTwoWeekLow",0)
 pe      = info.get("trailingPE",0)
 name    = info.get("longName") or info.get("shortName",display_name)
 
+# 메트릭 카드 글자 크기 줄이기
+st.markdown("""
+<style>
+[data-testid="stMetricValue"] { font-size: 14px !important; }
+[data-testid="stMetricLabel"] { font-size: 11px !important; }
+[data-testid="stMetricDelta"] { font-size: 11px !important; }
+</style>
+""", unsafe_allow_html=True)
+
 c1,c2,c3,c4,c5,c6 = st.columns(6)
 _chg_label = f"{chg_pct:+.2f}%" if chg_pct != 0 else "전일 동일"
 c1.metric("현재가", fmt_p(price), _chg_label)
