@@ -10,23 +10,17 @@ st.set_page_config(page_title="코스피 주식 대시보드", page_icon="📈",
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_kospi_stocks():
-    """KRX 공식 API로 코스피 전종목 로딩"""
-    # 방법 1: KRX 공식 REST API
+    """로컬 JSON → pykrx → KRX API 순으로 시도"""
+    # 방법 1: 로컬 JSON 파일 (가장 빠르고 안정적)
     try:
-        import urllib.request, json
-        url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13&marketType=stockMkt"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://kind.krx.co.kr"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            raw = r.read().decode("euc-kr", errors="replace")
-        result = {}
-        for line in raw.split("\n")[1:]:
-            cols = line.strip().split("\t")
-            if len(cols) >= 2:
-                name = cols[0].strip()
-                code = cols[1].strip().zfill(6)
-                if name and code: result[name] = code + ".KS"
-        if len(result) > 100: return result
-    except Exception: pass
+        import json, os
+        json_path = os.path.join(os.path.dirname(__file__), "kospi_stocks.json")
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if len(data) > 100:
+            return data
+    except Exception:
+        pass
 
     # 방법 2: pykrx
     try:
@@ -40,7 +34,8 @@ def load_kospi_stocks():
                     n = stock.get_market_ticker_name(code)
                     if n: result[n] = code + ".KS"
                 if len(result) > 100: return result
-    except Exception: pass
+    except Exception:
+        pass
 
     # 방법 3: KRX 데이터포탈 API
     try:
@@ -51,17 +46,18 @@ def load_kospi_stocks():
             "mktId": "STK", "share": "1", "csvxls_isNo": "false"
         }).encode()
         req = urllib.request.Request(url, data=params, method="POST",
-            headers={"User-Agent":"Mozilla/5.0","Content-Type":"application/x-www-form-urlencoded",
-                     "Referer":"https://data.krx.co.kr"})
+            headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/x-www-form-urlencoded",
+                     "Referer": "https://data.krx.co.kr"})
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
         result = {}
         for row in data.get("OutBlock_1", []):
-            name = row.get("ISU_ABBRV","").strip()
-            code = row.get("ISU_SRT_CD","").strip()
+            name = row.get("ISU_ABBRV", "").strip()
+            code = row.get("ISU_SRT_CD", "").strip()
             if name and code: result[name] = code + ".KS"
         if len(result) > 100: return result
-    except Exception: pass
+    except Exception:
+        pass
 
     return BUILTIN_KOSPI
 
