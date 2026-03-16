@@ -395,11 +395,21 @@ with st.sidebar:
         if wi:
             wp = wi.get("currentPrice") or wi.get("regularMarketPrice",0)
             wc = wi.get("regularMarketChangePercent",0)
-            sym = "₩" if wt.endswith(".KS") else "$"
-            price_str = f"{sym}{int(wp):,}" if wt.endswith(".KS") else f"${wp:,.2f}"
-            with c1: st.markdown(f"{'🟢' if wc>=0 else '🔴'}{flag} **{wname}**  \n{price_str} ({wc:+.2f}%)")
+            color = "#22c55e" if wc>=0 else "#ef4444"
+            sign  = "▲" if wc>=0 else "▼"
+            price_str = f"₩{int(wp):,}" if wt.endswith(".KS") else f"${wp:,.2f}"
+            with c1: st.markdown(f"""<div style="padding:4px 0;cursor:pointer;">
+<span style="font-size:10px;color:#64748b;">{flag} {wt.replace('.KS','').replace('.KQ','')}</span><br>
+<span style="font-size:12px;font-weight:600;color:#e2e8f0;">{wname}</span><br>
+<span style="font-size:11px;font-family:monospace;color:#94a3b8;">{price_str}</span>
+<span style="font-size:10px;color:{color};margin-left:4px;">{sign}{abs(wc):.2f}%</span>
+</div>""", unsafe_allow_html=True)
         else:
-            with c1: st.markdown(f"⚪{flag} **{wname}**")
+            with c1: st.markdown(f"""<div style="padding:4px 0;">
+<span style="font-size:10px;color:#64748b;">{flag} {wt.replace('.KS','')}</span><br>
+<span style="font-size:12px;font-weight:600;color:#e2e8f0;">{wname}</span><br>
+<span style="font-size:10px;color:#475569;">로딩 중...</span>
+</div>""", unsafe_allow_html=True)
         with c2:
             if st.button("✕", key=f"del_{wt}"): to_remove = wt
     if to_remove:
