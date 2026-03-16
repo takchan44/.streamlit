@@ -18,13 +18,29 @@ def load_kospi_stocks():
             if tickers:
                 result = {}
                 for code in tickers:
-                    name = stock.get_market_ticker_name(code)
-                    if name: result[name] = code + ".KS"
+                    n = stock.get_market_ticker_name(code)
+                    if n: result[n] = code + ".KS"
                 if result: return result
     except Exception: pass
-    return BUILTIN_STOCKS
+    return BUILTIN_KOSPI
 
-BUILTIN_STOCKS = {
+@st.cache_data(ttl=86400, show_spinner=False)
+def load_nasdaq_stocks():
+    """나스닥 전종목 — nasdaq-trader.com 공개 파일에서 로딩"""
+    try:
+        url = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=5000&exchange=NASDAQ&download=true"
+        import urllib.request, json
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        rows = data["data"]["rows"]
+        return {row["name"]: row["symbol"] for row in rows if row.get("symbol") and row.get("name")}
+    except Exception:
+        pass
+    # 폴백: 주요 나스닥 종목
+    return BUILTIN_NASDAQ
+
+BUILTIN_KOSPI = {
     "삼성전자":"005930.KS","SK하이닉스":"000660.KS","LG에너지솔루션":"373220.KS",
     "삼성바이오로직스":"207940.KS","현대차":"005380.KS","셀트리온":"068270.KS",
     "기아":"000270.KS","KB금융":"105560.KS","신한지주":"055550.KS","POSCO홀딩스":"005490.KS",
@@ -53,13 +69,35 @@ BUILTIN_STOCKS = {
     "금호석유":"011780.KS","코웨이":"021240.KS",
 }
 
+BUILTIN_NASDAQ = {
+    "Apple":"AAPL","Microsoft":"MSFT","NVIDIA":"NVDA","Amazon":"AMZN",
+    "Meta Platforms":"META","Alphabet Class A":"GOOGL","Alphabet Class C":"GOOG",
+    "Tesla":"TSLA","Broadcom":"AVGO","Netflix":"NFLX","AMD":"AMD",
+    "Intel":"INTC","Qualcomm":"QCOM","Texas Instruments":"TXN",
+    "Micron Technology":"MU","Applied Materials":"AMAT","ASML":"ASML",
+    "Costco":"COST","PepsiCo":"PEP","Starbucks":"SBUX","Booking Holdings":"BKNG",
+    "Lam Research":"LRCX","KLA Corporation":"KLAC","Analog Devices":"ADI",
+    "Marvell Technology":"MRVL","Palo Alto Networks":"PANW","CrowdStrike":"CRWD",
+    "Datadog":"DDOG","Snowflake":"SNOW","Palantir":"PLTR","Uber":"UBER",
+    "Airbnb":"ABNB","Coinbase":"COIN","MercadoLibre":"MELI","Pinduoduo":"PDD",
+    "JD.com":"JD","Baidu":"BIDU","NetEase":"NTES","Trip.com":"TCOM",
+    "Moderna":"MRNA","Biogen":"BIIB","Gilead Sciences":"GILD","Illumina":"ILMN",
+    "Intuitive Surgical":"ISRG","Align Technology":"ALGN","Regeneron":"REGN",
+    "Vertex Pharmaceuticals":"VRTX","Amgen":"AMGN","Cintas":"CTAS",
+    "Fastenal":"FAST","Old Dominion Freight":"ODFL","Workday":"WDAY",
+    "Fortinet":"FTNT","Zscaler":"ZS","ServiceNow":"NOW","Splunk":"SPLK",
+    "MongoDB":"MDB","HubSpot":"HUBS","Cloudflare":"NET","Okta":"OKTA",
+}
+
 # ── 세션 초기화 ─────────────────────────────────────────
 if "portfolio"       not in st.session_state: st.session_state.portfolio = []
-if "watchlist"       not in st.session_state: st.session_state.watchlist = ["005930.KS","000660.KS","035420.KS","005380.KS","068270.KS"]
+if "watchlist"       not in st.session_state: st.session_state.watchlist = ["005930.KS","000660.KS","035420.KS","AAPL","NVDA"]
 if "selected_ticker" not in st.session_state: st.session_state.selected_ticker = "005930.KS"
 if "kospi_loaded"    not in st.session_state: st.session_state.kospi_loaded = False
+if "nasdaq_loaded"   not in st.session_state: st.session_state.nasdaq_loaded = False
 if "chart_period"    not in st.session_state: st.session_state.chart_period = "일"
 if "drawn_lines"     not in st.session_state: st.session_state.drawn_lines = []
+if "market_tab"      not in st.session_state: st.session_state.market_tab = "코스피"
 if "ma_settings"     not in st.session_state:
     st.session_state.ma_settings = [
         {"window":5,   "color":"#FF6B35","show":True},
@@ -78,8 +116,19 @@ if not st.session_state.kospi_loaded:
         st.session_state.kospi_stocks = KOSPI_STOCKS
         st.session_state.kospi_loaded = True
 else:
-    KOSPI_STOCKS = st.session_state.get("kospi_stocks", BUILTIN_STOCKS)
-TICKER_NAME_MAP = {v: k for k, v in KOSPI_STOCKS.items()}
+    KOSPI_STOCKS = st.session_state.get("kospi_stocks", BUILTIN_KOSPI)
+
+if not st.session_state.nasdaq_loaded:
+    with st.spinner("나스닥 전 종목 불러오는 중..."):
+        NASDAQ_STOCKS = load_nasdaq_stocks()
+        st.session_state.nasdaq_stocks = NASDAQ_STOCKS
+        st.session_state.nasdaq_loaded = True
+else:
+    NASDAQ_STOCKS = st.session_state.get("nasdaq_stocks", BUILTIN_NASDAQ)
+
+# 전체 종목 통합 맵 (이름→티커, 티커→이름)
+ALL_STOCKS = {**KOSPI_STOCKS, **NASDAQ_STOCKS}
+TICKER_NAME_MAP = {v: k for k, v in ALL_STOCKS.items()}
 
 def format_price(p):
     if not p: return "N/A"
@@ -152,27 +201,53 @@ def get_news(ticker):
 
 # ── 사이드바 ────────────────────────────────────────────
 with st.sidebar:
-    st.markdown(f"### 🔍 종목 검색")
-    st.caption(f"총 {len(KOSPI_STOCKS):,}개 종목")
-    sq = st.text_input("종목명 또는 코드", placeholder="삼성, 005930...")
+    st.markdown("### 🔍 종목 검색")
+
+    # 통합 검색창
+    sq = st.text_input("종목명 또는 코드 검색", placeholder="삼성, AAPL, 005930, NVDA...")
+
     if sq:
         q = sq.strip().upper()
-        results = {n:t for n,t in KOSPI_STOCKS.items() if q in n.upper() or q in t.replace(".KS","")}
-        if results:
-            sel = st.selectbox(f"검색 결과 {len(results)}개", list(results.keys()),
-                               format_func=lambda x: f"{x} ({results[x].replace('.KS','')})")
+        # 코스피 + 나스닥 통합 검색
+        kospi_res  = {n:t for n,t in KOSPI_STOCKS.items()  if q in n.upper() or q in t.replace(".KS","").upper()}
+        nasdaq_res = {n:t for n,t in NASDAQ_STOCKS.items() if q in n.upper() or q in t.upper()}
+        all_res = {**kospi_res, **nasdaq_res}
+
+        if all_res:
+            st.caption(f"코스피 {len(kospi_res)}개 · 나스닥 {len(nasdaq_res)}개")
+            sel = st.selectbox(f"검색 결과 {len(all_res)}개", list(all_res.keys()),
+                               format_func=lambda x: f"{'🇰🇷' if all_res[x].endswith('.KS') else '🇺🇸'} {x}  ({all_res[x].replace('.KS','')})")
             if st.button("조회", use_container_width=True, key="btn_search"):
-                st.session_state.selected_ticker = results[sel]; st.rerun()
+                st.session_state.selected_ticker = all_res[sel]; st.rerun()
         else:
             st.caption("검색 결과가 없습니다.")
+            if st.button(f"'{sq}' 직접 조회", use_container_width=True, key="btn_direct"):
+                st.session_state.selected_ticker = sq.upper(); st.rerun()
     else:
-        names = list(KOSPI_STOCKS.keys())
-        cur = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
-        didx = names.index(cur) if cur in names else 0
-        sel = st.selectbox("전체 종목", names, index=didx,
-                           format_func=lambda x: f"{x} ({KOSPI_STOCKS[x].replace('.KS','')})")
-        if st.button("조회", use_container_width=True, key="btn_list"):
-            st.session_state.selected_ticker = KOSPI_STOCKS[sel]; st.rerun()
+        # 시장 탭 선택
+        mkt = st.radio("시장", ["🇰🇷 코스피", "🇺🇸 나스닥"], horizontal=True, key="mkt_radio")
+        is_kospi = "코스피" in mkt
+
+        if is_kospi:
+            stock_list = KOSPI_STOCKS
+            st.caption(f"총 {len(stock_list):,}개 종목")
+            names = list(stock_list.keys())
+            cur   = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
+            didx  = names.index(cur) if cur in names else 0
+            sel   = st.selectbox("종목 선택", names, index=didx,
+                                 format_func=lambda x: f"{x}  ({stock_list[x].replace('.KS','')})")
+            if st.button("조회", use_container_width=True, key="btn_kospi"):
+                st.session_state.selected_ticker = stock_list[sel]; st.rerun()
+        else:
+            stock_list = NASDAQ_STOCKS
+            st.caption(f"총 {len(stock_list):,}개 종목")
+            names = list(stock_list.keys())
+            cur   = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
+            didx  = names.index(cur) if cur in names else 0
+            sel   = st.selectbox("종목 선택", names, index=didx,
+                                 format_func=lambda x: f"{x}  ({stock_list[x]})")
+            if st.button("조회", use_container_width=True, key="btn_nasdaq"):
+                st.session_state.selected_ticker = stock_list[sel]; st.rerun()
 
     st.markdown("---")
     st.markdown("### ⭐ 관심 종목")
@@ -180,25 +255,29 @@ with st.sidebar:
     for wt in st.session_state.watchlist:
         wi = get_stock_info(wt)
         wname = TICKER_NAME_MAP.get(wt, wt.replace(".KS",""))
+        flag  = "🇰🇷" if wt.endswith(".KS") else "🇺🇸"
         c1,c2 = st.columns([5,1])
         if wi:
             wp = wi.get("currentPrice") or wi.get("regularMarketPrice",0)
             wc = wi.get("regularMarketChangePercent",0)
-            with c1: st.markdown(f"{'🟢' if wc>=0 else '🔴'} **{wname}**  \n{format_price(wp)} ({wc:+.2f}%)")
+            sym = "₩" if wt.endswith(".KS") else "$"
+            price_str = f"{sym}{int(wp):,}" if wt.endswith(".KS") else f"${wp:,.2f}"
+            with c1: st.markdown(f"{'🟢' if wc>=0 else '🔴'}{flag} **{wname}**  \n{price_str} ({wc:+.2f}%)")
         else:
-            with c1: st.markdown(f"⚪ **{wname}**")
+            with c1: st.markdown(f"⚪{flag} **{wname}**")
         with c2:
             if st.button("✕", key=f"del_{wt}"): to_remove = wt
     if to_remove:
         st.session_state.watchlist.remove(to_remove); st.rerun()
     st.markdown("---")
     st.caption("관심 종목 추가")
-    wq = st.text_input("검색", placeholder="삼성전자, 005930", key="wq")
+    wq = st.text_input("검색", placeholder="삼성전자, AAPL, 005930", key="wq")
     if wq:
-        wqr = {n:t for n,t in KOSPI_STOCKS.items() if wq.upper() in n.upper() or wq in t.replace(".KS","")}
+        wqr = {n:t for n,t in ALL_STOCKS.items()
+               if wq.upper() in n.upper() or wq.upper() in t.upper().replace(".KS","")}
         if wqr:
             wpick = st.selectbox("선택", list(wqr.keys()), key="wpick",
-                                 format_func=lambda x: f"{x} ({wqr[x].replace('.KS','')})")
+                                 format_func=lambda x: f"{'🇰🇷' if wqr[x].endswith('.KS') else '🇺🇸'} {x} ({wqr[x].replace('.KS','')})")
             if st.button("관심 추가", use_container_width=True):
                 wt = wqr.get(wpick)
                 if wt and wt not in st.session_state.watchlist:
@@ -208,6 +287,12 @@ with st.sidebar:
 ticker_input = st.session_state.selected_ticker
 display_name = TICKER_NAME_MAP.get(ticker_input, ticker_input.replace(".KS",""))
 code_display = ticker_input.replace(".KS","")
+is_korean    = ticker_input.endswith(".KS") or ticker_input.endswith(".KQ")
+
+def fmt_p(p):
+    if not p: return "N/A"
+    return f"₩{int(p):,}" if is_korean else f"${p:,.2f}"
+
 st.markdown(f"## 📈 {display_name} ({code_display})")
 
 with st.spinner("데이터 불러오는 중..."):
@@ -225,11 +310,11 @@ pe      = info.get("trailingPE",0)
 name    = info.get("longName") or info.get("shortName",display_name)
 
 c1,c2,c3,c4,c5,c6 = st.columns(6)
-c1.metric("현재가",  format_price(price),  f"{chg_pct:+.2f}%")
+c1.metric("현재가",  fmt_p(price),  f"{chg_pct:+.2f}%")
 c2.metric("시가총액", format_cap(mkt_cap))
-c3.metric("거래량",  f"{volume/1e4:.0f}만주" if volume else "N/A")
-c4.metric("52주 최고", format_price(high_52) if high_52 else "N/A")
-c5.metric("52주 최저", format_price(low_52)  if low_52  else "N/A")
+c3.metric("거래량",  f"{volume/1e4:.0f}만주" if (volume and is_korean) else (f"{volume/1e6:.1f}M" if volume else "N/A"))
+c4.metric("52주 최고", fmt_p(high_52) if high_52 else "N/A")
+c5.metric("52주 최저", fmt_p(low_52)  if low_52  else "N/A")
 c6.metric("P/E 비율",  f"{pe:.1f}" if pe else "N/A")
 
 st.markdown("---")
@@ -604,11 +689,11 @@ with col_ai:
             ps=", ".join([f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
                           for p in st.session_state.portfolio]) or "없음"
             ss=f"""종목: {name} ({code_display})
-현재가: {format_price(price)}
+현재가: {fmt_p(price)}
 등락률: {chg_pct:+.2f}%
 시가총액: {format_cap(mkt_cap)}
 P/E: {f"{pe:.1f}" if pe else "N/A"}
-52주 범위: {format_price(low_52)} ~ {format_price(high_52)}
+52주 범위: {fmt_p(low_52)} ~ {fmt_p(high_52)}
 포트폴리오: {ps}"""
             with st.spinner("Gemini가 분석 중..."):
                 try:
