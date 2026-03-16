@@ -952,7 +952,7 @@ with col_news:
             genai2.configure(api_key=api_key)
             # 구글 검색 시도
             try:
-                m = genai2.GenerativeModel("gemini-1.5-flash-latest", tools=["google_search_retrieval"])
+                m = genai2.GenerativeModel("gemini-2.0-flash", tools=["google_search_retrieval"])
                 prompt = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최신 주요 뉴스 5개를 찾아서
 아래 JSON 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
 [{{"rank":1,"title":"뉴스제목(40자이내)","source":"언론사","date":"MM/DD","summary":"한줄요약(50자이내)","impact":"긍정 또는 부정 또는 중립"}}]"""
@@ -963,7 +963,7 @@ with col_news:
                     if items: return items
             except Exception: pass
             # 폴백
-            m2 = genai2.GenerativeModel("gemini-1.5-flash-latest")
+            m2 = genai2.GenerativeModel("gemini-2.0-flash")
             prompt2 = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최근 주요 뉴스 5개를 {lang}로
 JSON 배열 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
 [{{"rank":1,"title":"제목","source":"출처","date":"날짜","summary":"요약","impact":"긍정 또는 부정 또는 중립"}}]"""
@@ -1107,7 +1107,7 @@ with col_ai:
                     import google.generativeai as genai2
                     genai2.configure(api_key=_ai_key)
                     _model = genai2.GenerativeModel(
-                        model_name="gemini-1.5-flash-latest",
+                        model_name="gemini-2.0-flash",
                         system_instruction=_system_prompt
                     )
                     # 대화 히스토리 포함해서 전송
