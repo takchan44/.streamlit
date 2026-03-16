@@ -5,14 +5,9 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import google.generativeai as genai
 
-st.set_page_config(
-    page_title="코스피 주식 대시보드",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="코스피 주식 대시보드", page_icon="📈",
+                   layout="wide", initial_sidebar_state="expanded")
 
-# ── 코스피 전 종목 불러오기 ─────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_kospi_stocks():
     try:
@@ -24,54 +19,38 @@ def load_kospi_stocks():
                 result = {}
                 for code in tickers:
                     name = stock.get_market_ticker_name(code)
-                    if name:
-                        result[name] = code + ".KS"
-                if result:
-                    return result
-    except Exception:
-        pass
+                    if name: result[name] = code + ".KS"
+                if result: return result
+    except Exception: pass
     return BUILTIN_STOCKS
 
 BUILTIN_STOCKS = {
-    "삼성전자": "005930.KS", "SK하이닉스": "000660.KS",
-    "LG에너지솔루션": "373220.KS", "삼성바이오로직스": "207940.KS",
-    "현대차": "005380.KS", "셀트리온": "068270.KS",
-    "기아": "000270.KS", "KB금융": "105560.KS",
-    "신한지주": "055550.KS", "POSCO홀딩스": "005490.KS",
-    "LG화학": "051910.KS", "삼성SDI": "006400.KS",
-    "현대모비스": "012330.KS", "카카오": "035720.KS",
-    "NAVER": "035420.KS", "하나금융지주": "086790.KS",
-    "우리금융지주": "316140.KS", "삼성물산": "028260.KS",
-    "LG전자": "066570.KS", "SK이노베이션": "096770.KS",
-    "SK텔레콤": "017670.KS", "KT": "030200.KS",
-    "한국전력": "015760.KS", "두산에너빌리티": "034020.KS",
-    "삼성생명": "032830.KS", "에코프로비엠": "247540.KS",
-    "에코프로": "086520.KS", "포스코퓨처엠": "003670.KS",
-    "한국조선해양": "009540.KS", "삼성중공업": "010140.KS",
-    "현대중공업": "329180.KS", "HD현대": "267250.KS",
-    "현대글로비스": "086280.KS", "아모레퍼시픽": "090430.KS",
-    "LG생활건강": "051900.KS", "하이브": "352820.KS",
-    "크래프톤": "259960.KS", "카카오뱅크": "323410.KS",
-    "카카오페이": "377300.KS", "대한항공": "003490.KS",
-    "현대건설": "000720.KS", "HMM": "011200.KS",
-    "강원랜드": "035250.KS", "한미약품": "128940.KS",
-    "유한양행": "000100.KS", "삼성전기": "009150.KS",
-    "삼성SDS": "018260.KS", "SK바이오팜": "326030.KS",
-    "HLB": "028300.KS", "기업은행": "024110.KS",
-    "미래에셋증권": "006800.KS", "한화에어로스페이스": "012450.KS",
-    "두산밥캣": "241560.KS", "고려아연": "010130.KS",
-    "농심": "004370.KS", "오리온": "271560.KS",
-    "CJ제일제당": "097950.KS", "종근당": "185750.KS",
-    "대웅제약": "069620.KS", "롯데쇼핑": "023530.KS",
-    "이마트": "139480.KS", "GS리테일": "007070.KS",
-    "현대백화점": "069960.KS", "한화솔루션": "009830.KS",
-    "CJ ENM": "035760.KS", "스튜디오드래곤": "253450.KS",
-    "엔씨소프트": "036570.KS", "넷마블": "251270.KS",
-    "GS건설": "006360.KS", "DL이앤씨": "375500.KS",
-    "호텔신라": "008770.KS", "삼성증권": "016360.KS",
-    "NH투자증권": "005940.KS", "SM엔터테인먼트": "041510.KS",
-    "JYP엔터테인먼트": "035900.KS", "LG": "003550.KS",
-    "SK": "034730.KS", "금호석유": "011780.KS", "코웨이": "021240.KS",
+    "삼성전자":"005930.KS","SK하이닉스":"000660.KS","LG에너지솔루션":"373220.KS",
+    "삼성바이오로직스":"207940.KS","현대차":"005380.KS","셀트리온":"068270.KS",
+    "기아":"000270.KS","KB금융":"105560.KS","신한지주":"055550.KS","POSCO홀딩스":"005490.KS",
+    "LG화학":"051910.KS","삼성SDI":"006400.KS","현대모비스":"012330.KS","카카오":"035720.KS",
+    "NAVER":"035420.KS","하나금융지주":"086790.KS","우리금융지주":"316140.KS",
+    "삼성물산":"028260.KS","LG전자":"066570.KS","SK이노베이션":"096770.KS",
+    "SK텔레콤":"017670.KS","KT":"030200.KS","한국전력":"015760.KS",
+    "두산에너빌리티":"034020.KS","삼성생명":"032830.KS","에코프로비엠":"247540.KS",
+    "에코프로":"086520.KS","포스코퓨처엠":"003670.KS","한국조선해양":"009540.KS",
+    "삼성중공업":"010140.KS","현대중공업":"329180.KS","HD현대":"267250.KS",
+    "현대글로비스":"086280.KS","아모레퍼시픽":"090430.KS","LG생활건강":"051900.KS",
+    "하이브":"352820.KS","크래프톤":"259960.KS","카카오뱅크":"323410.KS",
+    "카카오페이":"377300.KS","대한항공":"003490.KS","현대건설":"000720.KS",
+    "HMM":"011200.KS","강원랜드":"035250.KS","한미약품":"128940.KS",
+    "유한양행":"000100.KS","삼성전기":"009150.KS","삼성SDS":"018260.KS",
+    "SK바이오팜":"326030.KS","HLB":"028300.KS","기업은행":"024110.KS",
+    "미래에셋증권":"006800.KS","한화에어로스페이스":"012450.KS","두산밥캣":"241560.KS",
+    "고려아연":"010130.KS","농심":"004370.KS","오리온":"271560.KS",
+    "CJ제일제당":"097950.KS","종근당":"185750.KS","대웅제약":"069620.KS",
+    "롯데쇼핑":"023530.KS","이마트":"139480.KS","GS리테일":"007070.KS",
+    "현대백화점":"069960.KS","한화솔루션":"009830.KS","CJ ENM":"035760.KS",
+    "스튜디오드래곤":"253450.KS","엔씨소프트":"036570.KS","넷마블":"251270.KS",
+    "GS건설":"006360.KS","DL이앤씨":"375500.KS","호텔신라":"008770.KS",
+    "삼성증권":"016360.KS","NH투자증권":"005940.KS","SM엔터테인먼트":"041510.KS",
+    "JYP엔터테인먼트":"035900.KS","LG":"003550.KS","SK":"034730.KS",
+    "금호석유":"011780.KS","코웨이":"021240.KS",
 }
 
 # ── 세션 초기화 ─────────────────────────────────────────
@@ -81,6 +60,16 @@ if "selected_ticker" not in st.session_state: st.session_state.selected_ticker =
 if "kospi_loaded"    not in st.session_state: st.session_state.kospi_loaded = False
 if "chart_period"    not in st.session_state: st.session_state.chart_period = "일"
 if "drawn_lines"     not in st.session_state: st.session_state.drawn_lines = []
+if "ma_settings"     not in st.session_state:
+    st.session_state.ma_settings = [
+        {"window":5,   "color":"#FF6B35","show":True},
+        {"window":20,  "color":"#F5C518","show":True},
+        {"window":60,  "color":"#C084FC","show":True},
+        {"window":125, "color":"#FFFFFF","show":True},
+    ]
+if "vp_settings" not in st.session_state:
+    st.session_state.vp_settings = {"bins":15,"color_above":"#3182F6","color_below":"#5BA3F5","show":True}
+if "indicators"  not in st.session_state: st.session_state.indicators = []
 
 # ── 종목 로딩 ───────────────────────────────────────────
 if not st.session_state.kospi_loaded:
@@ -90,177 +79,153 @@ if not st.session_state.kospi_loaded:
         st.session_state.kospi_loaded = True
 else:
     KOSPI_STOCKS = st.session_state.get("kospi_stocks", BUILTIN_STOCKS)
-
 TICKER_NAME_MAP = {v: k for k, v in KOSPI_STOCKS.items()}
 
-# ── 유틸 함수 ───────────────────────────────────────────
-def format_price(price):
-    if not price: return "N/A"
-    return f"₩{int(price):,}"
+def format_price(p):
+    if not p: return "N/A"
+    return f"₩{int(p):,}"
 
-def format_cap(val):
-    if not val: return "N/A"
-    if val >= 1e12: return f"{val/1e12:.1f}조"
-    elif val >= 1e8: return f"{val/1e8:.0f}억"
-    return f"{val/1e9:.1f}B"
+def format_cap(v):
+    if not v: return "N/A"
+    if v >= 1e12: return f"{v/1e12:.1f}조"
+    elif v >= 1e8: return f"{v/1e8:.0f}억"
+    return f"{v/1e9:.1f}B"
 
-# ── 데이터 함수 ─────────────────────────────────────────
+def hex_to_rgba(h, a):
+    r,g,b = int(h[1:3],16),int(h[3:5],16),int(h[5:7],16)
+    return f"rgba({r},{g},{b},{a})"
+
 @st.cache_data(ttl=60, show_spinner=False)
-def get_stock_info(ticker: str):
+def get_stock_info(ticker):
     try:
-        t = yf.Ticker(ticker)
-        info = t.info
-        price = info.get("currentPrice") or info.get("regularMarketPrice")
-        if price:
-            return info
+        t = yf.Ticker(ticker); info = t.info
+        if info.get("currentPrice") or info.get("regularMarketPrice"): return info
         hist = t.history(period="5d")
         if not hist.empty:
-            last_close = float(hist["Close"].iloc[-1])
-            info["currentPrice"] = last_close
-            info["regularMarketPrice"] = last_close
-            if not info.get("regularMarketVolume"):
-                info["regularMarketVolume"] = int(hist["Volume"].iloc[-1])
+            lc = float(hist["Close"].iloc[-1])
+            info["currentPrice"] = lc; info["regularMarketPrice"] = lc
+            if not info.get("regularMarketVolume"): info["regularMarketVolume"] = int(hist["Volume"].iloc[-1])
             return info
-    except Exception:
-        pass
+    except Exception: pass
     try:
         from pykrx import stock as krx
         code = ticker.replace(".KS","").replace(".KQ","")
         for i in range(5):
-            d = (datetime.today() - timedelta(days=i)).strftime("%Y%m%d")
-            df = krx.get_market_ohlcv_by_date(d, d, code)
+            d = (datetime.today()-timedelta(days=i)).strftime("%Y%m%d")
+            df = krx.get_market_ohlcv_by_date(d,d,code)
             if not df.empty:
                 row = df.iloc[-1]
-                close = float(row["종가"])
-                return {
-                    "currentPrice": close, "regularMarketPrice": close,
-                    "regularMarketVolume": int(row["거래량"]),
-                    "regularMarketChangePercent": float(row.get("등락률", 0)),
-                    "regularMarketChange": float(row["종가"] - row["시가"]),
-                    "fiftyTwoWeekHigh": 0, "fiftyTwoWeekLow": 0,
-                    "marketCap": 0, "trailingPE": 0,
-                    "longName": krx.get_market_ticker_name(code),
-                }
-    except Exception:
-        pass
+                return {"currentPrice":float(row["종가"]),"regularMarketPrice":float(row["종가"]),
+                        "regularMarketVolume":int(row["거래량"]),
+                        "regularMarketChangePercent":float(row.get("등락률",0)),
+                        "regularMarketChange":float(row["종가"]-row["시가"]),
+                        "fiftyTwoWeekHigh":0,"fiftyTwoWeekLow":0,"marketCap":0,"trailingPE":0,
+                        "longName":krx.get_market_ticker_name(code)}
+    except Exception: pass
     return None
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_history(ticker: str, period: str):
+def get_history(ticker, period):
     try:
-        hist = yf.Ticker(ticker).history(period=period)
-        if not hist.empty:
-            return hist
-    except Exception:
-        pass
+        h = yf.Ticker(ticker).history(period=period)
+        if not h.empty: return h
+    except Exception: pass
     try:
         from pykrx import stock as krx
         code = ticker.replace(".KS","").replace(".KQ","")
-        days = {"5d":7,"1mo":30,"3mo":90,"6mo":180,"1y":365,"5y":1825}.get(period, 90)
-        end   = datetime.today().strftime("%Y%m%d")
-        start = (datetime.today() - timedelta(days=days)).strftime("%Y%m%d")
-        df = krx.get_market_ohlcv_by_date(start, end, code)
+        days = {"5d":7,"1mo":30,"3mo":90,"6mo":180,"1y":365,"5y":1825,"10y":3650}.get(period,90)
+        end = datetime.today().strftime("%Y%m%d")
+        start = (datetime.today()-timedelta(days=days)).strftime("%Y%m%d")
+        df = krx.get_market_ohlcv_by_date(start,end,code)
         if not df.empty:
             df = df.rename(columns={"시가":"Open","고가":"High","저가":"Low","종가":"Close","거래량":"Volume"})
             return df[["Open","High","Low","Close","Volume"]]
-    except Exception:
-        pass
+    except Exception: pass
     return pd.DataFrame()
 
 @st.cache_data(ttl=600, show_spinner=False)
-def get_news(ticker: str):
+def get_news(ticker):
     try:
         news = yf.Ticker(ticker).news
         return news[:5] if news else []
-    except Exception:
-        return []
+    except Exception: return []
 
 # ── 사이드바 ────────────────────────────────────────────
 with st.sidebar:
     st.markdown(f"### 🔍 종목 검색")
     st.caption(f"총 {len(KOSPI_STOCKS):,}개 종목")
-    search_query = st.text_input("종목명 또는 코드", placeholder="삼성, 005930...")
-    if search_query:
-        q = search_query.strip().upper()
-        results = {n: t for n, t in KOSPI_STOCKS.items() if q in n.upper() or q in t.replace(".KS","")}
+    sq = st.text_input("종목명 또는 코드", placeholder="삼성, 005930...")
+    if sq:
+        q = sq.strip().upper()
+        results = {n:t for n,t in KOSPI_STOCKS.items() if q in n.upper() or q in t.replace(".KS","")}
         if results:
-            names = list(results.keys())
-            sel = st.selectbox(f"검색 결과 {len(results)}개", options=names,
+            sel = st.selectbox(f"검색 결과 {len(results)}개", list(results.keys()),
                                format_func=lambda x: f"{x} ({results[x].replace('.KS','')})")
             if st.button("조회", use_container_width=True, key="btn_search"):
-                st.session_state.selected_ticker = results[sel]
-                st.rerun()
+                st.session_state.selected_ticker = results[sel]; st.rerun()
         else:
             st.caption("검색 결과가 없습니다.")
     else:
         names = list(KOSPI_STOCKS.keys())
-        current_name = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
-        default_idx = names.index(current_name) if current_name in names else 0
-        sel = st.selectbox("전체 종목", options=names, index=default_idx,
+        cur = TICKER_NAME_MAP.get(st.session_state.selected_ticker, names[0])
+        didx = names.index(cur) if cur in names else 0
+        sel = st.selectbox("전체 종목", names, index=didx,
                            format_func=lambda x: f"{x} ({KOSPI_STOCKS[x].replace('.KS','')})")
         if st.button("조회", use_container_width=True, key="btn_list"):
-            st.session_state.selected_ticker = KOSPI_STOCKS[sel]
-            st.rerun()
+            st.session_state.selected_ticker = KOSPI_STOCKS[sel]; st.rerun()
 
     st.markdown("---")
     st.markdown("### ⭐ 관심 종목")
     to_remove = None
     for wt in st.session_state.watchlist:
-        winfo = get_stock_info(wt)
+        wi = get_stock_info(wt)
         wname = TICKER_NAME_MAP.get(wt, wt.replace(".KS",""))
-        c1, c2 = st.columns([5,1])
-        if winfo:
-            wp = winfo.get("currentPrice") or winfo.get("regularMarketPrice", 0)
-            wc = winfo.get("regularMarketChangePercent", 0)
-            icon = "🟢" if wc >= 0 else "🔴"
-            with c1: st.markdown(f"{icon} **{wname}**  \n{format_price(wp)} ({wc:+.2f}%)")
+        c1,c2 = st.columns([5,1])
+        if wi:
+            wp = wi.get("currentPrice") or wi.get("regularMarketPrice",0)
+            wc = wi.get("regularMarketChangePercent",0)
+            with c1: st.markdown(f"{'🟢' if wc>=0 else '🔴'} **{wname}**  \n{format_price(wp)} ({wc:+.2f}%)")
         else:
             with c1: st.markdown(f"⚪ **{wname}**")
         with c2:
             if st.button("✕", key=f"del_{wt}"): to_remove = wt
     if to_remove:
-        st.session_state.watchlist.remove(to_remove)
-        st.rerun()
-
+        st.session_state.watchlist.remove(to_remove); st.rerun()
     st.markdown("---")
     st.caption("관심 종목 추가")
     wq = st.text_input("검색", placeholder="삼성전자, 005930", key="wq")
     if wq:
-        wqr = {n: t for n, t in KOSPI_STOCKS.items() if wq.upper() in n.upper() or wq in t.replace(".KS","")}
+        wqr = {n:t for n,t in KOSPI_STOCKS.items() if wq.upper() in n.upper() or wq in t.replace(".KS","")}
         if wqr:
             wpick = st.selectbox("선택", list(wqr.keys()), key="wpick",
                                  format_func=lambda x: f"{x} ({wqr[x].replace('.KS','')})")
             if st.button("관심 추가", use_container_width=True):
                 wt = wqr.get(wpick)
                 if wt and wt not in st.session_state.watchlist:
-                    st.session_state.watchlist.append(wt)
-                    st.rerun()
+                    st.session_state.watchlist.append(wt); st.rerun()
 
 # ── 메인 ────────────────────────────────────────────────
 ticker_input = st.session_state.selected_ticker
 display_name = TICKER_NAME_MAP.get(ticker_input, ticker_input.replace(".KS",""))
 code_display = ticker_input.replace(".KS","")
-
 st.markdown(f"## 📈 {display_name} ({code_display})")
 
 with st.spinner("데이터 불러오는 중..."):
     info = get_stock_info(ticker_input)
-
 if info is None:
-    st.error(f"**{display_name}** 데이터를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.")
-    st.stop()
+    st.error(f"**{display_name}** 데이터를 불러올 수 없습니다."); st.stop()
 
-price   = info.get("currentPrice") or info.get("regularMarketPrice", 0)
-chg_pct = info.get("regularMarketChangePercent", 0)
-mkt_cap = info.get("marketCap", 0)
-volume  = info.get("regularMarketVolume", 0)
-high_52 = info.get("fiftyTwoWeekHigh", 0)
-low_52  = info.get("fiftyTwoWeekLow", 0)
-pe      = info.get("trailingPE", 0)
-name    = info.get("longName") or info.get("shortName", display_name)
+price   = info.get("currentPrice") or info.get("regularMarketPrice",0)
+chg_pct = info.get("regularMarketChangePercent",0)
+mkt_cap = info.get("marketCap",0)
+volume  = info.get("regularMarketVolume",0)
+high_52 = info.get("fiftyTwoWeekHigh",0)
+low_52  = info.get("fiftyTwoWeekLow",0)
+pe      = info.get("trailingPE",0)
+name    = info.get("longName") or info.get("shortName",display_name)
 
 c1,c2,c3,c4,c5,c6 = st.columns(6)
-c1.metric("현재가",  format_price(price), f"{chg_pct:+.2f}%")
+c1.metric("현재가",  format_price(price),  f"{chg_pct:+.2f}%")
 c2.metric("시가총액", format_cap(mkt_cap))
 c3.metric("거래량",  f"{volume/1e4:.0f}만주" if volume else "N/A")
 c4.metric("52주 최고", format_price(high_52) if high_52 else "N/A")
@@ -268,313 +233,314 @@ c5.metric("52주 최저", format_price(low_52)  if low_52  else "N/A")
 c6.metric("P/E 비율",  f"{pe:.1f}" if pe else "N/A")
 
 st.markdown("---")
-col_chart, col_port = st.columns([2, 1])
+col_chart, col_port = st.columns([2,1])
 
-# ── 차트 ────────────────────────────────────────────────
 with col_chart:
-    # 기간 버튼
-    period_map = {"일": "3mo", "주": "1y", "월": "5y", "년": "10y"}
+    # ── 기간 버튼 ──
+    period_map = {"일":"3mo","주":"1y","월":"5y","년":"10y"}
     pcols = st.columns(len(period_map))
-    for i, (label, _) in enumerate(period_map.items()):
+    for i,(label,_) in enumerate(period_map.items()):
         with pcols[i]:
-            btn_type = "primary" if st.session_state.chart_period == label else "secondary"
-            if st.button(label, key=f"period_{label}", use_container_width=True, type=btn_type):
-                st.session_state.chart_period = label
-                st.rerun()
+            btype = "primary" if st.session_state.chart_period==label else "secondary"
+            if st.button(label, key=f"period_{label}", use_container_width=True, type=btype):
+                st.session_state.chart_period = label; st.rerun()
     plabel = st.session_state.chart_period
-    if plabel not in period_map:
-        st.session_state.chart_period = "일"
-        plabel = "일"
+    if plabel not in period_map: st.session_state.chart_period="일"; plabel="일"
+    unit = {"일":"일","주":"주","월":"개월","년":"년"}[plabel]
 
-    # 기간별 이동평균선 설정
-    # 일봉: 5·20·60·120일
-    # 주봉: 5·20·60·120주 → 실제 일수로 환산해서 동일 컬럼 사용
-    # 월봉·년봉도 동일 컬럼(5·20·60·120) 사용 — 데이터 포인트 기준
-    MA_SETTINGS = {
-        "일": [
-            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5일)"),
-            ("MA20",  20,  "#F5C518", 1.2, "MA20(20일)"),
-            ("MA60",  60,  "#C084FC", 1.2, "MA60(60일)"),
-            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120일)"),
-        ],
-        "주": [
-            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5주)"),
-            ("MA20",  20,  "#F5C518", 1.2, "MA20(20주)"),
-            ("MA60",  60,  "#C084FC", 1.2, "MA60(60주)"),
-            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120주)"),
-        ],
-        "월": [
-            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5개월)"),
-            ("MA20",  20,  "#F5C518", 1.2, "MA20(20개월)"),
-            ("MA60",  60,  "#C084FC", 1.2, "MA60(60개월)"),
-            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120개월)"),
-        ],
-        "년": [
-            ("MA5",   5,   "#FF6B35", 1.2, "MA5(5년)"),
-            ("MA20",  20,  "#F5C518", 1.2, "MA20(20년)"),
-            ("MA60",  60,  "#C084FC", 1.2, "MA60(60년)"),
-            ("MA120", 120, "#FFFFFF", 1.5, "MA120(120년)"),
-        ],
-    }
+    # ── 설정 탭 ──
+    tab_ma, tab_vp, tab_ind, tab_draw = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기"])
 
-    # 옵션 체크박스
-    opt1, opt2, opt3 = st.columns(3)
-    with opt1: show_ma = st.checkbox("이동평균선 (5·20·60·120)", value=True)
-    with opt2: show_vp = st.checkbox("매물대 15구간", value=True)
-    with opt3: draw_mode = st.selectbox("그리기 도구", ["없음","추세선","수평선"], label_visibility="collapsed")
+    with tab_ma:
+        st.caption("수치와 색상을 자유롭게 설정하세요")
+        new_ma = []
+        for idx, ma in enumerate(st.session_state.ma_settings):
+            c1,c2,c3 = st.columns([1,3,2])
+            show = c1.checkbox("", value=ma["show"], key=f"ma_show_{idx}")
+            win  = c2.number_input(f"MA{idx+1} 기간({unit})", min_value=1, max_value=500,
+                                   value=ma["window"], key=f"ma_win_{idx}")
+            col  = c3.color_picker("색상", value=ma["color"], key=f"ma_col_{idx}")
+            new_ma.append({"window":win,"color":col,"show":show})
+        bc1,bc2 = st.columns(2)
+        if bc1.button("줄 추가", key="add_ma"):
+            st.session_state.ma_settings.append({"window":200,"color":"#22D3EE","show":True}); st.rerun()
+        if bc2.button("마지막 삭제", key="del_ma") and len(st.session_state.ma_settings)>1:
+            st.session_state.ma_settings.pop(); st.rerun()
+        st.session_state.ma_settings = new_ma
 
-    # 그리기 도구 UI
-    if draw_mode == "추세선":
-        st.caption("📏 추세선 — 시작/끝 날짜와 가격을 입력하세요")
-        d1,d2,d3,d4,d5 = st.columns([2,2,2,2,1])
-        line_x0 = d1.date_input("시작일", key="lx0")
-        line_y0 = d2.number_input("시작가", min_value=0, value=int(price) if price else 0, step=100, key="ly0")
-        line_x1 = d3.date_input("끝날짜", key="lx1")
-        line_y1 = d4.number_input("끝가격", min_value=0, value=int(price) if price else 0, step=100, key="ly1")
-        with d5:
-            st.markdown("<div style='margin-top:26px'>", unsafe_allow_html=True)
-            if st.button("추가", key="add_trend"):
-                st.session_state.drawn_lines.append({
-                    "type":"trend","x0":str(line_x0),"y0":line_y0,
-                    "x1":str(line_x1),"y1":line_y1,"color":"#F5A623"
-                })
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
+    with tab_vp:
+        st.caption("매물대 구간 수와 색상을 설정하세요")
+        vp = st.session_state.vp_settings
+        v1,v2 = st.columns(2)
+        vp_show  = v1.checkbox("매물대 표시", value=vp["show"], key="vp_show")
+        vp_bins  = v2.number_input("구간 수", min_value=5, max_value=50, value=vp["bins"], key="vp_bins")
+        v3,v4 = st.columns(2)
+        vp_above = v3.color_picker("현재가 위 색상", value=vp["color_above"], key="vp_above")
+        vp_below = v4.color_picker("현재가 아래 색상", value=vp["color_below"], key="vp_below")
+        st.session_state.vp_settings = {"bins":vp_bins,"color_above":vp_above,"color_below":vp_below,"show":vp_show}
 
-    elif draw_mode == "수평선":
-        st.caption("📐 수평선 — 가격을 입력하세요")
-        h1, h2 = st.columns([5,1])
-        h_price = h1.number_input("가격", min_value=0, value=int(price) if price else 0, step=100, key="hprice")
-        with h2:
-            st.markdown("<div style='margin-top:26px'>", unsafe_allow_html=True)
-            if st.button("추가", key="add_hline"):
-                st.session_state.drawn_lines.append({"type":"hline","y":h_price,"color":"#A78BFA"})
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
+    with tab_ind:
+        st.caption("최대 3개까지 선택 (볼린저밴드는 메인 차트에 오버레이)")
+        ind_opts = ["MACD","RSI","볼린저밴드","스토캐스틱","OBV","CCI","Williams %R","ATR"]
+        selected_inds = st.multiselect("지표 선택", ind_opts,
+                                       default=st.session_state.indicators,
+                                       max_selections=3, key="ind_select")
+        st.session_state.indicators = selected_inds
 
-    if st.session_state.drawn_lines:
-        if st.button(f"선 전체 삭제 ({len(st.session_state.drawn_lines)}개)", key="clear_lines"):
-            st.session_state.drawn_lines = []
-            st.rerun()
+    with tab_draw:
+        draw_mode = st.selectbox("도구", ["없음","추세선","수평선"], key="draw_sel")
+        if draw_mode == "추세선":
+            d1,d2,d3,d4,d5 = st.columns([2,2,2,2,1])
+            lx0 = d1.date_input("시작일", key="lx0")
+            ly0 = d2.number_input("시작가", min_value=0, value=int(price) if price else 0, step=100, key="ly0")
+            lx1 = d3.date_input("끝날짜", key="lx1")
+            ly1 = d4.number_input("끝가격", min_value=0, value=int(price) if price else 0, step=100, key="ly1")
+            with d5:
+                st.markdown("<div style='margin-top:26px'>", unsafe_allow_html=True)
+                if st.button("추가", key="add_trend"):
+                    st.session_state.drawn_lines.append({"type":"trend","x0":str(lx0),"y0":ly0,"x1":str(lx1),"y1":ly1,"color":"#F5A623"})
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+        elif draw_mode == "수평선":
+            h1,h2 = st.columns([5,1])
+            hp = h1.number_input("가격", min_value=0, value=int(price) if price else 0, step=100, key="hprice")
+            with h2:
+                st.markdown("<div style='margin-top:26px'>", unsafe_allow_html=True)
+                if st.button("추가", key="add_hline"):
+                    st.session_state.drawn_lines.append({"type":"hline","y":hp,"color":"#A78BFA"}); st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+        if st.session_state.drawn_lines:
+            if st.button(f"선 전체 삭제 ({len(st.session_state.drawn_lines)}개)", key="clear_lines"):
+                st.session_state.drawn_lines = []; st.rerun()
 
+    # ── 데이터 로딩 & 리샘플 ──
     hist_raw = get_history(ticker_input, period_map[plabel])
-
     if not hist_raw.empty:
         hist = hist_raw.copy()
+        if plabel=="주":   hist = hist.resample("W").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+        elif plabel=="월": hist = hist.resample("ME").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
+        elif plabel=="년": hist = hist.resample("YE").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
 
-        # 주봉·월봉·년봉 리샘플링
-        if plabel == "주":
-            hist = hist.resample("W").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
-        elif plabel == "월":
-            hist = hist.resample("ME").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
-        elif plabel == "년":
-            hist = hist.resample("YE").agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"}).dropna()
-
-        # 이동평균선 계산 (데이터 포인트 기준)
-        ma_cfg = MA_SETTINGS.get(plabel, MA_SETTINGS["일"])
-        for col, window, _, _, _ in ma_cfg:
-            hist[col] = hist["Close"].rolling(window).mean()
+        # MA 계산
+        for idx,ma in enumerate(st.session_state.ma_settings):
+            hist[f"_MA{idx}"] = hist["Close"].rolling(ma["window"]).mean()
 
         # 매물대 계산
-        NUM_VP = 15
-        p_min = hist["Low"].min()
-        p_max = hist["High"].max()
-        p_range = p_max - p_min
-        bin_size = p_range / NUM_VP
+        vp_cfg = st.session_state.vp_settings
+        NVP = vp_cfg["bins"]
+        pmin,pmax = hist["Low"].min(), hist["High"].max()
+        bsz = (pmax-pmin)/NVP
         vp_data = []
-        for i in range(NUM_VP):
-            lo = p_min + i * bin_size
-            hi = lo + bin_size
-            mid = (lo + hi) / 2
-            vol = hist[(hist["Close"] >= lo) & (hist["Close"] < hi)]["Volume"].sum()
-            vp_data.append({"lo": lo, "hi": hi, "mid": mid, "vol": vol})
-        vp_df = pd.DataFrame(vp_data)
-        vp_max = vp_df["vol"].max() if vp_df["vol"].max() > 0 else 1
+        for i in range(NVP):
+            lo,hi = pmin+i*bsz, pmin+(i+1)*bsz
+            vol = hist[(hist["Close"]>=lo)&(hist["Close"]<hi)]["Volume"].sum()
+            vp_data.append({"lo":lo,"hi":hi,"mid":(lo+hi)/2,"vol":vol})
+        vp_df  = pd.DataFrame(vp_data)
+        vp_max = vp_df["vol"].max() if vp_df["vol"].max()>0 else 1
+        x_end  = hist.index[-1]; x_start = hist.index[0]
+        tot_days = max((x_end-x_start).days,1)
+        vp_mw    = int(tot_days*0.15)
 
-        # 날짜 범위
-        x_end   = hist.index[-1]
-        x_start = hist.index[0]
-        total_days = max((x_end - x_start).days, 1)
-        # 매물대 최대 너비: 전체 기간의 15% — 오른쪽→왼쪽이므로 음수 방향
-        vp_max_width_days = int(total_days * 0.15)
+        # 보조지표 계산
+        inds = st.session_state.indicators
+        if "볼린저밴드" in inds:
+            hist["_BB_mid"]   = hist["Close"].rolling(20).mean()
+            hist["_BB_std"]   = hist["Close"].rolling(20).std()
+            hist["_BB_upper"] = hist["_BB_mid"]+2*hist["_BB_std"]
+            hist["_BB_lower"] = hist["_BB_mid"]-2*hist["_BB_std"]
+        if "MACD" in inds:
+            e1=hist["Close"].ewm(span=12,adjust=False).mean()
+            e2=hist["Close"].ewm(span=26,adjust=False).mean()
+            hist["_MACD"]=e1-e2
+            hist["_MACD_sig"]=hist["_MACD"].ewm(span=9,adjust=False).mean()
+            hist["_MACD_hist"]=hist["_MACD"]-hist["_MACD_sig"]
+        if "RSI" in inds:
+            d=hist["Close"].diff()
+            gain=d.clip(lower=0).rolling(14).mean()
+            loss=(-d.clip(upper=0)).rolling(14).mean()
+            hist["_RSI"]=100-(100/(1+gain/loss.replace(0,float("nan"))))
+        if "스토캐스틱" in inds:
+            lo14=hist["Low"].rolling(14).min(); hi14=hist["High"].rolling(14).max()
+            hist["_STOCH_K"]=100*(hist["Close"]-lo14)/(hi14-lo14+1e-9)
+            hist["_STOCH_D"]=hist["_STOCH_K"].rolling(3).mean()
+        if "OBV" in inds:
+            obv=[0]
+            for i in range(1,len(hist)):
+                if hist["Close"].iloc[i]>hist["Close"].iloc[i-1]: obv.append(obv[-1]+hist["Volume"].iloc[i])
+                elif hist["Close"].iloc[i]<hist["Close"].iloc[i-1]: obv.append(obv[-1]-hist["Volume"].iloc[i])
+                else: obv.append(obv[-1])
+            hist["_OBV"]=obv
+        if "CCI" in inds:
+            tp=(hist["High"]+hist["Low"]+hist["Close"])/3
+            hist["_CCI"]=(tp-tp.rolling(20).mean())/(0.015*tp.rolling(20).std())
+        if "Williams %R" in inds:
+            hi14=hist["High"].rolling(14).max(); lo14=hist["Low"].rolling(14).min()
+            hist["_WILLR"]=-100*(hi14-hist["Close"])/(hi14-lo14+1e-9)
+        if "ATR" in inds:
+            tr=pd.concat([hist["High"]-hist["Low"],(hist["High"]-hist["Close"].shift()).abs(),(hist["Low"]-hist["Close"].shift()).abs()],axis=1).max(axis=1)
+            hist["_ATR"]=tr.rolling(14).mean()
 
-        up_color   = "#3182F6"
-        down_color = "#F04452"
+        UP="#3182F6"; DN="#F04452"
 
+        # ── 메인 차트 ──
         fig = go.Figure()
-
-        # 캔들스틱
         fig.add_trace(go.Candlestick(
-            x=hist.index,
-            open=hist["Open"], high=hist["High"],
-            low=hist["Low"],  close=hist["Close"],
+            x=hist.index, open=hist["Open"], high=hist["High"], low=hist["Low"], close=hist["Close"],
             name="캔들",
-            increasing=dict(line=dict(color=up_color,   width=1), fillcolor=up_color),
-            decreasing=dict(line=dict(color=down_color, width=1), fillcolor=down_color),
+            increasing=dict(line=dict(color=UP,width=1),fillcolor=UP),
+            decreasing=dict(line=dict(color=DN,width=1),fillcolor=DN),
             whiskerwidth=0.5,
-            hovertext=[
-                f"시가 {format_price(o)}<br>고가 {format_price(h)}<br>저가 {format_price(l)}<br>종가 {format_price(c)}"
-                for o,h,l,c in zip(hist["Open"],hist["High"],hist["Low"],hist["Close"])
-            ],
+            hovertext=[f"시가 {format_price(o)}<br>고가 {format_price(h)}<br>저가 {format_price(l)}<br>종가 {format_price(c)}"
+                       for o,h,l,c in zip(hist["Open"],hist["High"],hist["Low"],hist["Close"])],
             hoverinfo="text+x",
         ))
 
-        # 이동평균선
-        if show_ma:
-            for col, _, color, width, label in ma_cfg:
-                valid = hist[col].dropna()
-                if not valid.empty:
-                    fig.add_trace(go.Scatter(
-                        x=hist.index, y=hist[col], mode="lines",
-                        line=dict(color=color, width=width), name=label,
-                        hovertemplate=f"{label}: ₩%{{y:,.0f}}<extra></extra>"
-                    ))
+        # 볼린저밴드 오버레이
+        if "볼린저밴드" in inds:
+            fig.add_trace(go.Scatter(x=hist.index,y=hist["_BB_upper"],mode="lines",
+                line=dict(color="rgba(100,200,255,0.6)",width=1,dash="dot"),name="BB상단"))
+            fig.add_trace(go.Scatter(x=hist.index,y=hist["_BB_mid"],mode="lines",
+                line=dict(color="rgba(100,200,255,0.4)",width=1),name="BB중간"))
+            fig.add_trace(go.Scatter(x=hist.index,y=hist["_BB_lower"],mode="lines",
+                line=dict(color="rgba(100,200,255,0.6)",width=1,dash="dot"),
+                fill="tonexty",fillcolor="rgba(100,200,255,0.03)",name="BB하단"))
 
-        # 매물대 — x_end 기준으로 왼쪽(-) 방향으로 그리기
-        if show_vp:
-            current_close = hist["Close"].iloc[-1]
-            for _, row in vp_df.iterrows():
-                if row["vol"] == 0:
-                    continue
-                bar_days = max(int(vp_max_width_days * row["vol"] / vp_max), 1)
-                # 오른쪽(x_end)에서 왼쪽으로 뻗도록 x0 > x1
-                bar_start = x_end
-                bar_end_x = x_end - pd.Timedelta(days=bar_days)
-                is_above = row["mid"] >= current_close
-                fill = "rgba(49,130,246,0.50)" if is_above else "rgba(49,130,246,0.22)"
-                fig.add_shape(
-                    type="rect",
-                    x0=bar_end_x, x1=bar_start,
-                    y0=row["lo"],  y1=row["hi"],
-                    fillcolor=fill, line=dict(width=0),
-                    xref="x", yref="y", layer="above"
-                )
-            # 현재가 점선
-            fig.add_hline(
-                y=current_close,
-                line=dict(color=up_color, width=1, dash="dot"),
-                annotation_text=f" {format_price(current_close)}",
-                annotation_position="right",
-                annotation_font=dict(size=11, color=up_color)
-            )
+        # MA 라인
+        for idx,ma in enumerate(st.session_state.ma_settings):
+            if not ma["show"]: continue
+            v = hist[f"_MA{idx}"].dropna()
+            if not v.empty:
+                fig.add_trace(go.Scatter(x=hist.index,y=hist[f"_MA{idx}"],mode="lines",
+                    line=dict(color=ma["color"],width=1.3),name=f"MA{ma['window']}",
+                    hovertemplate=f"MA{ma['window']}: ₩%{{y:,.0f}}<extra></extra>"))
 
-        # 매물대 — Scatter 막대로 변환 (줌 연동을 위해 shapes 대신 trace 사용)
-        if show_vp:
-            current_close = hist["Close"].iloc[-1]
-            for _, row in vp_df.iterrows():
-                if row["vol"] == 0:
-                    continue
-                bar_days = max(int(vp_max_width_days * row["vol"] / vp_max), 1)
-                bar_end_x = x_end - pd.Timedelta(days=bar_days)
-                is_above  = row["mid"] >= current_close
-                fill  = "rgba(49,130,246,0.55)" if is_above else "rgba(49,130,246,0.25)"
-                # 수평 막대를 얇은 Scatter fill로 표현 → 줌/팬에 완전 연동
+        # 매물대 (Scatter fill — 줌 완전 연동)
+        if vp_cfg["show"]:
+            cur = hist["Close"].iloc[-1]
+            for _,row in vp_df.iterrows():
+                if row["vol"]==0: continue
+                bd = max(int(vp_mw*row["vol"]/vp_max),1)
+                bex = x_end-pd.Timedelta(days=bd)
+                ia  = row["mid"]>=cur
+                fc  = hex_to_rgba(vp_cfg["color_above"] if ia else vp_cfg["color_below"], "0.55" if ia else "0.30")
                 fig.add_trace(go.Scatter(
-                    x=[bar_end_x, x_end, x_end, bar_end_x, bar_end_x],
-                    y=[row["lo"], row["lo"], row["hi"], row["hi"], row["lo"]],
-                    fill="toself",
-                    fillcolor=fill,
-                    line=dict(width=0),
-                    mode="lines",
-                    showlegend=False,
-                    hoverinfo="skip",
-                ))
-            # 현재가 점선 — trace로 (add_hline은 paper 좌표라 줌 무관)
-            fig.add_trace(go.Scatter(
-                x=[x_start, x_end],
-                y=[current_close, current_close],
-                mode="lines",
-                line=dict(color=up_color, width=1, dash="dot"),
-                showlegend=False,
-                hovertemplate=f"현재가: {format_price(current_close)}<extra></extra>",
-            ))
+                    x=[bex,x_end,x_end,bex,bex],y=[row["lo"],row["lo"],row["hi"],row["hi"],row["lo"]],
+                    fill="toself",fillcolor=fc,line=dict(width=0),mode="lines",showlegend=False,hoverinfo="skip"))
+            fig.add_trace(go.Scatter(x=[x_start,x_end],y=[cur,cur],mode="lines",
+                line=dict(color=UP,width=1,dash="dot"),showlegend=False,
+                hovertemplate=f"현재가: {format_price(cur)}<extra></extra>"))
 
-        # 사용자가 그린 선
+        # 사용자 선
         for ln in st.session_state.drawn_lines:
-            if ln["type"] == "trend":
-                fig.add_trace(go.Scatter(
-                    x=[ln["x0"], ln["x1"]],
-                    y=[ln["y0"], ln["y1"]],
-                    mode="lines",
-                    line=dict(color=ln["color"], width=1.5),
-                    showlegend=False,
-                    hovertemplate=f"₩%{{y:,.0f}}<extra>추세선</extra>",
-                ))
-            elif ln["type"] == "hline":
-                fig.add_trace(go.Scatter(
-                    x=[x_start, x_end],
-                    y=[ln["y"], ln["y"]],
-                    mode="lines",
-                    line=dict(color=ln["color"], width=1.5, dash="dash"),
-                    showlegend=False,
-                    hovertemplate=f"{format_price(ln['y'])}<extra>수평선</extra>",
-                ))
+            if ln["type"]=="trend":
+                fig.add_trace(go.Scatter(x=[ln["x0"],ln["x1"]],y=[ln["y0"],ln["y1"]],
+                    mode="lines",line=dict(color=ln["color"],width=1.5),showlegend=False,
+                    hovertemplate="₩%{y:,.0f}<extra>추세선</extra>"))
+            elif ln["type"]=="hline":
+                fig.add_trace(go.Scatter(x=[x_start,x_end],y=[ln["y"],ln["y"]],
+                    mode="lines",line=dict(color=ln["color"],width=1.5,dash="dash"),showlegend=False,
+                    hovertemplate=f"{format_price(ln['y'])}<extra>수평선</extra>"))
 
-        tick_fmt_map = {"일": "%m.%d", "주": "%y.%m.%d", "월": "%y.%m", "년": "%Y"}
-        tick_fmt = tick_fmt_map.get(plabel, "%m.%d")
+        tf = {"일":"%m.%d","주":"%y.%m.%d","월":"%y.%m","년":"%Y"}.get(plabel,"%m.%d")
         fig.update_layout(
-            height=500,
-            margin=dict(l=0, r=90, t=10, b=0),
-            plot_bgcolor="#0E1117",
-            paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(
-                showgrid=False, zeroline=False, showline=False,
-                tickfont=dict(size=11, color="#666"),
-                tickformat=tick_fmt,
-                rangeslider=dict(visible=False),
-            ),
-            yaxis=dict(
-                showgrid=True, gridcolor="rgba(255,255,255,0.05)",
-                zeroline=False, showline=False,
-                tickfont=dict(size=11, color="#666"),
-                tickformat=",", side="right",
-            ),
-            hovermode="x unified",
-            legend=dict(
-                orientation="h", y=1.02, x=0,
-                font=dict(size=11, color="#aaa"),
-                bgcolor="rgba(0,0,0,0)",
-            ),
-            dragmode="pan",       # 기본: 드래그로 이동
+            height=500,margin=dict(l=0,r=90,t=10,b=0),
+            plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False,zeroline=False,showline=False,
+                       tickfont=dict(size=11,color="#666"),tickformat=tf,rangeslider=dict(visible=False)),
+            yaxis=dict(showgrid=True,gridcolor="rgba(255,255,255,0.05)",zeroline=False,showline=False,
+                       tickfont=dict(size=11,color="#666"),tickformat=",",side="right"),
+            hovermode="x unified",dragmode="pan",
+            legend=dict(orientation="h",y=1.02,x=0,font=dict(size=11,color="#aaa"),bgcolor="rgba(0,0,0,0)"),
         )
-        st.plotly_chart(fig, use_container_width=True, config={
-            "displayModeBar": True,
-            "modeBarButtonsToRemove": ["lasso2d","select2d","autoScale2d","zoom2d"],
-            "displaylogo": False,
-            "scrollZoom": True,   # 마우스 휠로만 줌
-        })
+        st.plotly_chart(fig,use_container_width=True,config={
+            "displayModeBar":True,
+            "modeBarButtonsToRemove":["lasso2d","select2d","autoScale2d","zoom2d"],
+            "displaylogo":False,"scrollZoom":True})
 
-        # 거래량 차트
-        vol_colors = [up_color if c >= o else down_color
-                      for c, o in zip(hist["Close"], hist["Open"])]
-        fig_vol = go.Figure()
-        fig_vol.add_trace(go.Bar(
-            x=hist.index, y=hist["Volume"],
-            marker_color=vol_colors,
-            hovertemplate="<b>%{x|%Y.%m.%d}</b><br>%{y:,.0f}주<extra></extra>",
-        ))
-        fig_vol.update_layout(
-            height=90, margin=dict(l=0, r=90, t=0, b=0),
-            plot_bgcolor="#0E1117", paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-            yaxis=dict(showgrid=False, showticklabels=False, zeroline=False, side="right"),
-            showlegend=False, bargap=0.15,
-        )
-        st.plotly_chart(fig_vol, use_container_width=True, config={"displayModeBar": False})
+        # 거래량
+        vc=[UP if c>=o else DN for c,o in zip(hist["Close"],hist["Open"])]
+        fv=go.Figure()
+        fv.add_trace(go.Bar(x=hist.index,y=hist["Volume"],marker_color=vc,
+            hovertemplate="<b>%{x|%Y.%m.%d}</b><br>%{y:,.0f}주<extra></extra>"))
+        fv.update_layout(height=80,margin=dict(l=0,r=90,t=0,b=0),
+            plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(showgrid=False,showticklabels=False,zeroline=False),
+            yaxis=dict(showgrid=False,showticklabels=False,zeroline=False,side="right"),
+            showlegend=False,bargap=0.15)
+        st.plotly_chart(fv,use_container_width=True,config={"displayModeBar":False})
 
-        # 범례 안내
-        st.markdown(
-            "<span style='font-size:11px;color:#555;'>"
-            "거래량 &nbsp;|&nbsp; "
-            "<span style='color:#FF6B35'>■ MA5</span> &nbsp;"
-            "<span style='color:#F5C518'>■ MA20</span> &nbsp;"
-            "<span style='color:#C084FC'>■ MA60</span> &nbsp;"
-            "<span style='color:#FFFFFF'>■ MA120</span> &nbsp;|&nbsp; "
-            "<span style='color:#F5A623'>— 추세선</span> &nbsp;"
-            "<span style='color:#A78BFA'>-- 수평선</span>"
-            "</span>",
-            unsafe_allow_html=True
-        )
+        # ── 보조지표 서브차트 ──
+        def sub_layout(h=160):
+            return dict(height=h,margin=dict(l=0,r=90,t=24,b=0),
+                plot_bgcolor="#0E1117",paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False,zeroline=False,showline=False,
+                           tickfont=dict(size=10,color="#555"),tickformat=tf),
+                yaxis=dict(showgrid=True,gridcolor="rgba(255,255,255,0.05)",
+                           zeroline=False,tickfont=dict(size=10,color="#555"),side="right"),
+                hovermode="x unified",showlegend=True,
+                legend=dict(orientation="h",y=1.2,x=0,font=dict(size=10,color="#aaa"),bgcolor="rgba(0,0,0,0)"))
+
+        if "MACD" in inds:
+            st.caption("▸ MACD (12·26·9)")
+            fm=go.Figure()
+            bc=["#3182F6" if v>=0 else "#F04452" for v in hist["_MACD_hist"].fillna(0)]
+            fm.add_trace(go.Bar(x=hist.index,y=hist["_MACD_hist"],marker_color=bc,name="히스토그램",hovertemplate="%{y:.2f}<extra>히스토그램</extra>"))
+            fm.add_trace(go.Scatter(x=hist.index,y=hist["_MACD"],mode="lines",line=dict(color="#3182F6",width=1.2),name="MACD",hovertemplate="MACD: %{y:.2f}<extra></extra>"))
+            fm.add_trace(go.Scatter(x=hist.index,y=hist["_MACD_sig"],mode="lines",line=dict(color="#F04452",width=1.2),name="시그널",hovertemplate="시그널: %{y:.2f}<extra></extra>"))
+            fm.update_layout(**sub_layout())
+            st.plotly_chart(fm,use_container_width=True,config={"displayModeBar":False})
+
+        if "RSI" in inds:
+            st.caption("▸ RSI (14) — 과매수 70 / 과매도 30")
+            fr=go.Figure()
+            fr.add_trace(go.Scatter(x=hist.index,y=hist["_RSI"],mode="lines",line=dict(color="#F5C518",width=1.5),name="RSI",hovertemplate="RSI: %{y:.1f}<extra></extra>"))
+            fr.add_hline(y=70,line=dict(color="#F04452",width=0.8,dash="dot"))
+            fr.add_hline(y=30,line=dict(color="#3182F6",width=0.8,dash="dot"))
+            fr.update_layout(**sub_layout()); fr.update_yaxes(range=[0,100])
+            st.plotly_chart(fr,use_container_width=True,config={"displayModeBar":False})
+
+        if "스토캐스틱" in inds:
+            st.caption("▸ 스토캐스틱 (K:14 D:3) — 과매수 80 / 과매도 20")
+            fs=go.Figure()
+            fs.add_trace(go.Scatter(x=hist.index,y=hist["_STOCH_K"],mode="lines",line=dict(color="#C084FC",width=1.3),name="%K",hovertemplate="%%K: %{y:.1f}<extra></extra>"))
+            fs.add_trace(go.Scatter(x=hist.index,y=hist["_STOCH_D"],mode="lines",line=dict(color="#F5A623",width=1.3),name="%D",hovertemplate="%%D: %{y:.1f}<extra></extra>"))
+            fs.add_hline(y=80,line=dict(color="#F04452",width=0.8,dash="dot"))
+            fs.add_hline(y=20,line=dict(color="#3182F6",width=0.8,dash="dot"))
+            fs.update_layout(**sub_layout()); fs.update_yaxes(range=[0,100])
+            st.plotly_chart(fs,use_container_width=True,config={"displayModeBar":False})
+
+        if "OBV" in inds:
+            st.caption("▸ OBV")
+            fo=go.Figure()
+            fo.add_trace(go.Scatter(x=hist.index,y=hist["_OBV"],mode="lines",line=dict(color="#22D3EE",width=1.3),name="OBV",hovertemplate="OBV: %{y:,.0f}<extra></extra>"))
+            fo.update_layout(**sub_layout())
+            st.plotly_chart(fo,use_container_width=True,config={"displayModeBar":False})
+
+        if "CCI" in inds:
+            st.caption("▸ CCI (20) — 과매수 +100 / 과매도 -100")
+            fc2=go.Figure()
+            fc2.add_trace(go.Scatter(x=hist.index,y=hist["_CCI"],mode="lines",line=dict(color="#34D399",width=1.3),name="CCI",hovertemplate="CCI: %{y:.1f}<extra></extra>"))
+            fc2.add_hline(y=100,line=dict(color="#F04452",width=0.8,dash="dot"))
+            fc2.add_hline(y=-100,line=dict(color="#3182F6",width=0.8,dash="dot"))
+            fc2.update_layout(**sub_layout())
+            st.plotly_chart(fc2,use_container_width=True,config={"displayModeBar":False})
+
+        if "Williams %R" in inds:
+            st.caption("▸ Williams %R (14) — 과매수 -20 / 과매도 -80")
+            fw=go.Figure()
+            fw.add_trace(go.Scatter(x=hist.index,y=hist["_WILLR"],mode="lines",line=dict(color="#FB923C",width=1.3),name="W%R",hovertemplate="W%%R: %{y:.1f}<extra></extra>"))
+            fw.add_hline(y=-20,line=dict(color="#F04452",width=0.8,dash="dot"))
+            fw.add_hline(y=-80,line=dict(color="#3182F6",width=0.8,dash="dot"))
+            fw.update_layout(**sub_layout()); fw.update_yaxes(range=[-100,0])
+            st.plotly_chart(fw,use_container_width=True,config={"displayModeBar":False})
+
+        if "ATR" in inds:
+            st.caption("▸ ATR (14) — 변동성 지표")
+            fa=go.Figure()
+            fa.add_trace(go.Scatter(x=hist.index,y=hist["_ATR"],mode="lines",line=dict(color="#A78BFA",width=1.3),name="ATR",hovertemplate="ATR: ₩%{y:,.0f}<extra></extra>"))
+            fa.update_layout(**sub_layout())
+            st.plotly_chart(fa,use_container_width=True,config={"displayModeBar":False})
+
     else:
         st.info("차트 데이터를 불러올 수 없습니다.")
 
@@ -585,93 +551,71 @@ with col_port:
         pa,pb,pc = st.columns([2,1,1])
         p_ticker = pa.text_input("종목코드 (6자리)", value=code_display)
         p_shares = pb.number_input("수량", min_value=1, value=10)
-        p_price  = pc.number_input("매수가", min_value=1.0, value=float(price) if price else 1000.0, step=100.0)
+        p_price2 = pc.number_input("매수가", min_value=1.0, value=float(price) if price else 1000.0, step=100.0)
         if st.form_submit_button("추가", use_container_width=True):
-            code = p_ticker.strip().zfill(6) + ".KS"
-            st.session_state.portfolio.append({"ticker": code, "shares": p_shares, "avg_price": p_price})
+            code = p_ticker.strip().zfill(6)+".KS"
+            st.session_state.portfolio.append({"ticker":code,"shares":p_shares,"avg_price":p_price2})
             st.rerun()
-
     if st.session_state.portfolio:
-        total_invest = total_value = 0
-        rows = []
+        ti=tv=0; rows=[]
         for item in st.session_state.portfolio:
             ci = get_stock_info(item["ticker"])
-            cp = (ci.get("currentPrice") or ci.get("regularMarketPrice", item["avg_price"])) if ci else item["avg_price"]
-            inv = item["avg_price"] * item["shares"]
-            val = cp * item["shares"]
-            pnl = val - inv
-            pnl_pct = (pnl / inv * 100) if inv else 0
-            total_invest += inv; total_value += val
-            pname = TICKER_NAME_MAP.get(item["ticker"], item["ticker"].replace(".KS",""))
-            rows.append({"종목": pname, "수량": item["shares"],
-                         "매수가": format_price(item["avg_price"]),
-                         "현재가": format_price(cp),
-                         "손익": f"₩{pnl:+,.0f} ({pnl_pct:+.1f}%)"})
-        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-        total_pnl = total_value - total_invest
-        total_pct = (total_pnl / total_invest * 100) if total_invest else 0
-        st.metric("총 평가손익", f"₩{total_pnl:+,.0f}", f"{total_pct:+.2f}%")
+            cp = (ci.get("currentPrice") or ci.get("regularMarketPrice",item["avg_price"])) if ci else item["avg_price"]
+            inv=item["avg_price"]*item["shares"]; val=cp*item["shares"]
+            pnl=val-inv; pp=(pnl/inv*100) if inv else 0
+            ti+=inv; tv+=val
+            pname=TICKER_NAME_MAP.get(item["ticker"],item["ticker"].replace(".KS",""))
+            rows.append({"종목":pname,"수량":item["shares"],"매수가":format_price(item["avg_price"]),
+                         "현재가":format_price(cp),"손익":f"₩{pnl:+,.0f} ({pp:+.1f}%)"})
+        st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+        tp=tv-ti; tpct=(tp/ti*100) if ti else 0
+        st.metric("총 평가손익",f"₩{tp:+,.0f}",f"{tpct:+.2f}%")
         if st.button("포트폴리오 초기화"):
-            st.session_state.portfolio = []
-            st.rerun()
+            st.session_state.portfolio=[]; st.rerun()
     else:
         st.info("종목을 추가해보세요.")
 
 st.markdown("---")
-col_news, col_ai = st.columns([1,1])
+col_news,col_ai = st.columns([1,1])
 
-# ── 뉴스 ────────────────────────────────────────────────
 with col_news:
     st.markdown("### 📰 관련 뉴스")
     news = get_news(ticker_input)
     if news:
         for item in news:
-            title    = item.get("title","")
-            link     = item.get("link","#")
-            pub      = item.get("publisher","")
-            pt       = item.get("providerPublishTime",0)
-            ts       = datetime.fromtimestamp(pt).strftime("%m/%d %H:%M") if pt else ""
-            st.markdown(f"**[{title}]({link})**  \n_{pub} · {ts}_")
+            t2=item.get("title",""); lk=item.get("link","#")
+            pb2=item.get("publisher",""); pt=item.get("providerPublishTime",0)
+            ts=datetime.fromtimestamp(pt).strftime("%m/%d %H:%M") if pt else ""
+            st.markdown(f"**[{t2}]({lk})**  \n_{pb2} · {ts}_")
             st.markdown("---")
     else:
         st.info("뉴스를 불러올 수 없습니다.")
 
-# ── AI 분석 ─────────────────────────────────────────────
 with col_ai:
     st.markdown("### 🤖 AI 주식 분석 (Gemini)")
-    try:
-        api_key = st.secrets.get("GEMINI_API_KEY","")
-    except Exception:
-        api_key = ""
-
+    try: api_key = st.secrets.get("GEMINI_API_KEY","")
+    except Exception: api_key=""
     question = st.text_area("질문 입력",
         placeholder=f"예: {display_name} 지금 매수하기 좋은 타이밍인가요?", height=100)
-
     if st.button("AI 분석 요청 ↗", use_container_width=True):
-        if not api_key:
-            st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정해주세요.")
-        elif not question.strip():
-            st.warning("질문을 입력해주세요.")
+        if not api_key: st.warning("Streamlit Cloud Secrets에 GEMINI_API_KEY를 설정해주세요.")
+        elif not question.strip(): st.warning("질문을 입력해주세요.")
         else:
-            port_summary = ", ".join([
-                f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
-                for p in st.session_state.portfolio
-            ]) or "없음"
-            stock_summary = f"""종목: {name} ({code_display})
+            ps=", ".join([f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
+                          for p in st.session_state.portfolio]) or "없음"
+            ss=f"""종목: {name} ({code_display})
 현재가: {format_price(price)}
 등락률: {chg_pct:+.2f}%
 시가총액: {format_cap(mkt_cap)}
 P/E: {f"{pe:.1f}" if pe else "N/A"}
 52주 범위: {format_price(low_52)} ~ {format_price(high_52)}
-포트폴리오: {port_summary}"""
+포트폴리오: {ps}"""
             with st.spinner("Gemini가 분석 중..."):
                 try:
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash",
-                        system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요."
-                    )
-                    response = model.generate_content(f"주식 데이터:\n{stock_summary}\n\n질문: {question}")
-                    st.success(response.text)
+                    model=genai.GenerativeModel(model_name="gemini-1.5-flash",
+                        system_instruction="당신은 전문 주식 분석가입니다. 주어진 데이터를 바탕으로 명확하고 유익한 분석을 제공하세요. 모든 금액은 원화(₩) 기준으로 설명하세요. 항상 투자 위험을 언급하세요.")
+                    resp=model.generate_content(f"주식 데이터:\n{ss}\n\n질문: {question}")
+                    st.success(resp.text)
                 except Exception as e:
                     st.error(f"오류 발생: {e}")
