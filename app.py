@@ -143,7 +143,11 @@ if "ma_settings"     not in st.session_state:
     ]
 if "vp_settings" not in st.session_state:
     st.session_state.vp_settings = {"bins":15,"color_above":"#3182F6","color_below":"#5BA3F5","show":True}
-if "chart_height"  not in st.session_state: st.session_state.chart_height = 500
+if "chart_height"    not in st.session_state: st.session_state.chart_height = 500
+if "indicators"      not in st.session_state: st.session_state.indicators = []
+if "auto_refresh"    not in st.session_state: st.session_state.auto_refresh = True
+if "refresh_sec"     not in st.session_state: st.session_state.refresh_sec = 30
+if "last_refresh"    not in st.session_state: st.session_state.last_refresh = 0
 
 # ── 종목 로딩 ───────────────────────────────────────────
 if not st.session_state.kospi_loaded:
