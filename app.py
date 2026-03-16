@@ -10,6 +10,25 @@ st.set_page_config(page_title="코스피 주식 대시보드", page_icon="📈",
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_kospi_stocks():
+    """KRX 공식 API로 코스피 전종목 로딩"""
+    # 방법 1: KRX 공식 REST API
+    try:
+        import urllib.request, json
+        url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13&marketType=stockMkt"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://kind.krx.co.kr"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            raw = r.read().decode("euc-kr", errors="replace")
+        result = {}
+        for line in raw.split("\n")[1:]:
+            cols = line.strip().split("\t")
+            if len(cols) >= 2:
+                name = cols[0].strip()
+                code = cols[1].strip().zfill(6)
+                if name and code: result[name] = code + ".KS"
+        if len(result) > 100: return result
+    except Exception: pass
+
+    # 방법 2: pykrx
     try:
         from pykrx import stock
         for i in range(5):
@@ -20,8 +39,30 @@ def load_kospi_stocks():
                 for code in tickers:
                     n = stock.get_market_ticker_name(code)
                     if n: result[n] = code + ".KS"
-                if result: return result
+                if len(result) > 100: return result
     except Exception: pass
+
+    # 방법 3: KRX 데이터포탈 API
+    try:
+        import urllib.request, json, urllib.parse
+        url = "https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
+        params = urllib.parse.urlencode({
+            "bld": "dbms/MDC/STAT/standard/MDCSTAT01901",
+            "mktId": "STK", "share": "1", "csvxls_isNo": "false"
+        }).encode()
+        req = urllib.request.Request(url, data=params, method="POST",
+            headers={"User-Agent":"Mozilla/5.0","Content-Type":"application/x-www-form-urlencoded",
+                     "Referer":"https://data.krx.co.kr"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        result = {}
+        for row in data.get("OutBlock_1", []):
+            name = row.get("ISU_ABBRV","").strip()
+            code = row.get("ISU_SRT_CD","").strip()
+            if name and code: result[name] = code + ".KS"
+        if len(result) > 100: return result
+    except Exception: pass
+
     return BUILTIN_KOSPI
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -118,6 +159,12 @@ if not st.session_state.kospi_loaded:
 else:
     KOSPI_STOCKS = st.session_state.get("kospi_stocks", BUILTIN_KOSPI)
 
+# 79개 이하면 재시도 (폴백 상태)
+if len(KOSPI_STOCKS) <= 79:
+    load_kospi_stocks.clear()
+    KOSPI_STOCKS = load_kospi_stocks()
+    st.session_state.kospi_stocks = KOSPI_STOCKS
+
 if not st.session_state.nasdaq_loaded:
     with st.spinner("나스닥 전 종목 불러오는 중..."):
         NASDAQ_STOCKS = load_nasdaq_stocks()
@@ -202,6 +249,20 @@ def get_news(ticker):
 # ── 사이드바 ────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🔍 종목 검색")
+    # 종목 수 표시 + 새로고침
+    sc1, sc2 = st.columns([3,1])
+    with sc1:
+        kospi_cnt  = len(KOSPI_STOCKS)
+        nasdaq_cnt = len(NASDAQ_STOCKS)
+        status = "✅" if kospi_cnt > 100 else "⚠️"
+        st.caption(f"{status} 코스피 {kospi_cnt:,}개 · 나스닥 {nasdaq_cnt:,}개")
+    with sc2:
+        if st.button("🔄", key="reload_stocks", help="종목 목록 새로고침"):
+            load_kospi_stocks.clear()
+            load_nasdaq_stocks.clear()
+            st.session_state.kospi_loaded  = False
+            st.session_state.nasdaq_loaded = False
+            st.rerun()
 
     # 통합 검색창
     sq = st.text_input("종목명 또는 코드 검색", placeholder="삼성, AAPL, 005930, NVDA...")
