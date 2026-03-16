@@ -143,11 +143,7 @@ if "ma_settings"     not in st.session_state:
     ]
 if "vp_settings" not in st.session_state:
     st.session_state.vp_settings = {"bins":15,"color_above":"#3182F6","color_below":"#5BA3F5","show":True}
-if "chart_height"    not in st.session_state: st.session_state.chart_height = 500
-if "indicators"      not in st.session_state: st.session_state.indicators = []
-if "auto_refresh"    not in st.session_state: st.session_state.auto_refresh = True
-if "refresh_sec"     not in st.session_state: st.session_state.refresh_sec = 30
-if "last_refresh"    not in st.session_state: st.session_state.last_refresh = 0
+if "chart_height"  not in st.session_state: st.session_state.chart_height = 500
 
 # ── 종목 로딩 ───────────────────────────────────────────
 if not st.session_state.kospi_loaded:
@@ -210,38 +206,9 @@ def _yf_get(url, timeout=8):
 
 @st.cache_data(ttl=30, show_spinner=False)
 def get_stock_info(ticker):
-    # Yahoo Finance v8 quoteSummary API
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1d"
-    data = _yf_get(url)
-    if data:
-        try:
-            meta = data["chart"]["result"][0]["meta"]
-            price  = meta.get("regularMarketPrice", 0)
-            prev   = meta.get("previousClose", price)
-            change = price - prev
-            chg_pct = (change / prev * 100) if prev else 0
-            hi52   = meta.get("fiftyTwoWeekHigh", 0)
-            lo52   = meta.get("fiftyTwoWeekLow", 0)
-            vol    = meta.get("regularMarketVolume", 0)
-            name   = meta.get("shortName") or meta.get("longName") or ticker
-            if price:
-                return {
-                    "currentPrice": price,
-                    "regularMarketPrice": price,
-                    "regularMarketChange": change,
-                    "regularMarketChangePercent": chg_pct,
-                    "regularMarketVolume": vol,
-                    "fiftyTwoWeekHigh": hi52,
-                    "fiftyTwoWeekLow": lo52,
-                    "marketCap": meta.get("marketCap", 0),
-                    "trailingPE": 0,
-                    "longName": name,
-                    "shortName": name,
-                }
-        except Exception:
-            pass
+    name_fallback = ticker.replace(".KS","").replace(".KQ","")
 
-    # 백업: v7 quote API
+    # ── 방법1: v7 quote API (가장 정확 — 장중/장후 모두)
     url2 = f"https://query2.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
     data2 = _yf_get(url2)
     if data2:
@@ -249,18 +216,56 @@ def get_stock_info(ticker):
             q = data2["quoteResponse"]["result"][0]
             price = q.get("regularMarketPrice", 0)
             if price:
+                chg     = q.get("regularMarketChange", 0) or 0
+                chg_pct = q.get("regularMarketChangePercent", 0) or 0
+                prev    = q.get("regularMarketPreviousClose", 0)
+                # 등락률이 0이고 전일 종가가 있으면 직접 계산
+                if chg_pct == 0 and prev and price != prev:
+                    chg     = price - prev
+                    chg_pct = (chg / prev * 100) if prev else 0
                 return {
                     "currentPrice": price,
                     "regularMarketPrice": price,
-                    "regularMarketChange": q.get("regularMarketChange", 0),
-                    "regularMarketChangePercent": q.get("regularMarketChangePercent", 0),
+                    "regularMarketChange": chg,
+                    "regularMarketChangePercent": chg_pct,
                     "regularMarketVolume": q.get("regularMarketVolume", 0),
                     "fiftyTwoWeekHigh": q.get("fiftyTwoWeekHigh", 0),
-                    "fiftyTwoWeekLow": q.get("fiftyTwoWeekLow", 0),
-                    "marketCap": q.get("marketCap", 0),
+                    "fiftyTwoWeekLow":  q.get("fiftyTwoWeekLow",  0),
+                    "marketCap":  q.get("marketCap",  0),
                     "trailingPE": q.get("trailingPE", 0),
-                    "longName": q.get("longName") or q.get("shortName") or ticker,
-                    "shortName": q.get("shortName") or ticker,
+                    "longName":  q.get("longName") or q.get("shortName") or name_fallback,
+                    "shortName": q.get("shortName") or name_fallback,
+                }
+        except Exception:
+            pass
+
+    # ── 방법2: v8 chart range=5d (최근 종가 2개로 등락 계산)
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=5d"
+    data = _yf_get(url)
+    if data:
+        try:
+            result  = data["chart"]["result"][0]
+            meta    = result["meta"]
+            closes  = [c for c in (result["indicators"]["quote"][0].get("close") or []) if c]
+            volumes = [v for v in (result["indicators"]["quote"][0].get("volume") or []) if v]
+            price   = meta.get("regularMarketPrice") or (closes[-1] if closes else 0)
+            prev    = meta.get("previousClose") or (closes[-2] if len(closes) >= 2 else price)
+            chg     = price - prev if prev else 0
+            chg_pct = (chg / prev * 100) if prev else 0
+            name    = meta.get("shortName") or meta.get("longName") or name_fallback
+            if price:
+                return {
+                    "currentPrice": price,
+                    "regularMarketPrice": price,
+                    "regularMarketChange": chg,
+                    "regularMarketChangePercent": chg_pct,
+                    "regularMarketVolume": volumes[-1] if volumes else meta.get("regularMarketVolume", 0),
+                    "fiftyTwoWeekHigh": meta.get("fiftyTwoWeekHigh", 0),
+                    "fiftyTwoWeekLow":  meta.get("fiftyTwoWeekLow",  0),
+                    "marketCap":  meta.get("marketCap",  0),
+                    "trailingPE": meta.get("trailingPE", 0),
+                    "longName":  name,
+                    "shortName": name,
                 }
         except Exception:
             pass
@@ -410,45 +415,6 @@ with st.sidebar:
                     st.session_state.watchlist.append(wt); st.rerun()
 
 # ── 메인 ────────────────────────────────────────────────
-# ── 자동 새로고침 ─────────────────────────────────────
-import time as _time_module
-
-_now = _time_module.time()
-_elapsed = _now - st.session_state.last_refresh
-
-# 사이드바 상단에 새로고침 컨트롤
-_rf_col1, _rf_col2, _rf_col3 = st.sidebar.columns([1, 2, 1])
-with _rf_col1:
-    st.session_state.auto_refresh = st.checkbox(
-        "자동", value=st.session_state.auto_refresh, key="auto_rf_chk"
-    )
-with _rf_col2:
-    _options = [10, 30, 60, 120]
-    _labels  = ["10초", "30초", "1분", "2분"]
-    _cur_idx = _options.index(st.session_state.refresh_sec) if st.session_state.refresh_sec in _options else 1
-    _sel = st.selectbox("새로고침", _labels, index=_cur_idx, key="rf_interval_sel", label_visibility="collapsed")
-    st.session_state.refresh_sec = _options[_labels.index(_sel)]
-with _rf_col3:
-    if st.button("🔄", key="manual_refresh", help="지금 새로고침"):
-        get_stock_info.clear()
-        st.session_state.last_refresh = _now
-        st.rerun()
-
-# 자동 새로고침 타이머
-if st.session_state.auto_refresh:
-    _remain = max(0, st.session_state.refresh_sec - int(_elapsed))
-    st.sidebar.caption(f"⏱ {_remain}초 후 자동 갱신")
-    if _elapsed >= st.session_state.refresh_sec:
-        get_stock_info.clear()
-        st.session_state.last_refresh = _now
-        st.rerun()
-    # Streamlit이 자동으로 재실행되도록 빈 placeholder에 타이머 설정
-    _timer_placeholder = st.sidebar.empty()
-    _timer_placeholder.markdown(
-        f"""<meta http-equiv="refresh" content="{_remain}">""",
-        unsafe_allow_html=True
-    )
-
 ticker_input = st.session_state.selected_ticker
 display_name = TICKER_NAME_MAP.get(ticker_input, ticker_input.replace(".KS",""))
 code_display = ticker_input.replace(".KS","")
@@ -581,7 +547,8 @@ pe      = info.get("trailingPE",0)
 name    = info.get("longName") or info.get("shortName",display_name)
 
 c1,c2,c3,c4,c5,c6 = st.columns(6)
-c1.metric("현재가",  fmt_p(price),  f"{chg_pct:+.2f}%")
+_chg_label = f"{chg_pct:+.2f}%" if chg_pct != 0 else "전일 동일"
+c1.metric("현재가", fmt_p(price), _chg_label)
 c2.metric("시가총액", format_cap(mkt_cap))
 c3.metric("거래량",  f"{volume/1e4:.0f}만주" if (volume and is_korean) else (f"{volume/1e6:.1f}M" if volume else "N/A"))
 c4.metric("52주 최고", fmt_p(high_52) if high_52 else "N/A")
