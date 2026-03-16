@@ -285,7 +285,7 @@ with col_chart:
 
     # 옵션 체크박스
     opt1, opt2, opt3 = st.columns(3)
-    with opt1: show_ma = st.checkbox("이동평균선 (5·20·60)", value=True)
+    with opt1: show_ma = st.checkbox("이동평균선 (5·20·60·120)", value=True)
     with opt2: show_vp = st.checkbox("매물대 15구간", value=True)
     with opt3: draw_mode = st.selectbox("그리기 도구", ["없음","추세선","수평선"], label_visibility="collapsed")
 
@@ -327,9 +327,10 @@ with col_chart:
 
     if not hist.empty:
         hist = hist.copy()
-        hist["MA5"]  = hist["Close"].rolling(5).mean()
-        hist["MA20"] = hist["Close"].rolling(20).mean()
-        hist["MA60"] = hist["Close"].rolling(60).mean()
+        hist["MA5"]   = hist["Close"].rolling(5).mean()
+        hist["MA20"]  = hist["Close"].rolling(20).mean()
+        hist["MA60"]  = hist["Close"].rolling(60).mean()
+        hist["MA120"] = hist["Close"].rolling(120).mean()
 
         # 매물대 계산
         NUM_VP = 15
@@ -347,13 +348,13 @@ with col_chart:
         vp_df = pd.DataFrame(vp_data)
         vp_max = vp_df["vol"].max() if vp_df["vol"].max() > 0 else 1
 
-        # 날짜 범위 (매물대 width 계산용)
-        x_end = hist.index[-1]
+        # 날짜 범위
+        x_end   = hist.index[-1]
         x_start = hist.index[0]
         total_days = max((x_end - x_start).days, 1)
+        # 매물대 최대 너비: 전체 기간의 15% — 오른쪽→왼쪽이므로 음수 방향
         vp_max_width_days = int(total_days * 0.15)
 
-        # 캔들 색상
         up_color   = "#3182F6"
         down_color = "#F04452"
 
@@ -375,33 +376,41 @@ with col_chart:
             hoverinfo="text+x",
         ))
 
-        # 이동평균선
+        # 이동평균선 (MA5·20·60·120)
         if show_ma:
-            for col, color, label in [("MA5","#FF6B35","MA5"),("MA20","#F5C518","MA20"),("MA60","#C084FC","MA60")]:
+            ma_list = [
+                ("MA5",   "#FF6B35", 1.2),
+                ("MA20",  "#F5C518", 1.2),
+                ("MA60",  "#C084FC", 1.2),
+                ("MA120", "#FFFFFF", 1.5),  # 흰색 (다크배경 기준 검정처럼 선명)
+            ]
+            for col, color, width in ma_list:
                 valid = hist[col].dropna()
                 if not valid.empty:
                     fig.add_trace(go.Scatter(
                         x=hist.index, y=hist[col], mode="lines",
-                        line=dict(color=color, width=1.2), name=label,
-                        hovertemplate=f"{label}: ₩%{{y:,.0f}}<extra></extra>"
+                        line=dict(color=color, width=width), name=col,
+                        hovertemplate=f"{col}: ₩%{{y:,.0f}}<extra></extra>"
                     ))
 
-        # 매물대 (오른쪽 수평 막대 — shapes)
+        # 매물대 — x_end 기준으로 왼쪽(-) 방향으로 그리기
         if show_vp:
             current_close = hist["Close"].iloc[-1]
             for _, row in vp_df.iterrows():
                 if row["vol"] == 0:
                     continue
                 bar_days = max(int(vp_max_width_days * row["vol"] / vp_max), 1)
-                bar_end  = x_end + pd.Timedelta(days=bar_days)
+                # 오른쪽(x_end)에서 왼쪽으로 뻗도록 x0 > x1
+                bar_start = x_end
+                bar_end_x = x_end - pd.Timedelta(days=bar_days)
                 is_above = row["mid"] >= current_close
-                fill = "rgba(49,130,246,0.45)" if is_above else "rgba(49,130,246,0.18)"
+                fill = "rgba(49,130,246,0.50)" if is_above else "rgba(49,130,246,0.22)"
                 fig.add_shape(
                     type="rect",
-                    x0=x_end, x1=bar_end,
-                    y0=row["lo"], y1=row["hi"],
+                    x0=bar_end_x, x1=bar_start,
+                    y0=row["lo"],  y1=row["hi"],
                     fillcolor=fill, line=dict(width=0),
-                    xref="x", yref="y", layer="below"
+                    xref="x", yref="y", layer="above"
                 )
             # 현재가 점선
             fig.add_hline(
@@ -494,7 +503,8 @@ with col_chart:
             "거래량 &nbsp;|&nbsp; "
             "<span style='color:#FF6B35'>■ MA5</span> &nbsp;"
             "<span style='color:#F5C518'>■ MA20</span> &nbsp;"
-            "<span style='color:#C084FC'>■ MA60</span> &nbsp;|&nbsp; "
+            "<span style='color:#C084FC'>■ MA60</span> &nbsp;"
+            "<span style='color:#FFFFFF'>■ MA120</span> &nbsp;|&nbsp; "
             "<span style='color:#F5A623'>— 추세선</span> &nbsp;"
             "<span style='color:#A78BFA'>-- 수평선</span>"
             "</span>",
