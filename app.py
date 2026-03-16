@@ -935,80 +935,98 @@ with col_port:
 st.markdown("---")
 col_news, col_ai = st.columns([1, 1])
 
-# ── 📰 주요 뉴스 (간단 버전) ─────────────────────────────
+# ── 📰 주요 뉴스 (RSS — API 키 불필요) ───────────────────
 with col_news:
     st.markdown("### 📰 주요 뉴스")
 
-    @st.cache_data(ttl=3600, show_spinner=False)
-    def get_simple_news(stock_name, ticker, api_key, date_key=""):
-        if not api_key: return None
-        import json, re
+    @st.cache_data(ttl=600, show_spinner=False)
+    def get_rss_news(stock_name, ticker):
+        """네이버/구글 뉴스 RSS로 뉴스 가져오기 — API 키 불필요"""
+        import urllib.request, urllib.parse
+        from xml.etree import ElementTree as ET
+
         is_kr = ticker.endswith(".KS") or ticker.endswith(".KQ")
         code  = ticker.replace(".KS","").replace(".KQ","")
-        today = datetime.today().strftime("%Y년 %m월 %d일")
-        lang  = "한국어" if is_kr else "영어"
-        try:
-            import google.generativeai as genai2
-            genai2.configure(api_key=api_key)
-            # 구글 검색 시도
+        results = []
+
+        # 검색어 목록 (한국어 우선, 영어 포함)
+        queries = [stock_name, code] if is_kr else [stock_name, code]
+
+        for q in queries:
+            if len(results) >= 5:
+                break
             try:
-                m = genai2.GenerativeModel("gemini-2.0-flash", tools=["google_search_retrieval"])
-                prompt = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최신 주요 뉴스 5개를 찾아서
-아래 JSON 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
-[{{"rank":1,"title":"뉴스제목(40자이내)","source":"언론사","date":"MM/DD","summary":"한줄요약(50자이내)","impact":"긍정 또는 부정 또는 중립"}}]"""
-                resp = m.generate_content(prompt)
-                match = re.search(r'\[.*\]', resp.text.strip(), re.DOTALL)
-                if match:
-                    items = json.loads(match.group())
-                    if items: return items
-            except Exception: pass
-            # 폴백
-            m2 = genai2.GenerativeModel("gemini-2.0-flash")
-            prompt2 = f"""오늘은 {today}입니다. '{stock_name}({code})' 관련 최근 주요 뉴스 5개를 {lang}로
-JSON 배열 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
-[{{"rank":1,"title":"제목","source":"출처","date":"날짜","summary":"요약","impact":"긍정 또는 부정 또는 중립"}}]"""
-            resp2 = m2.generate_content(prompt2)
-            match2 = re.search(r'\[.*\]', resp2.text.strip(), re.DOTALL)
-            if match2:
-                return json.loads(match2.group())
-        except Exception: pass
-        return None
+                # 네이버 뉴스 RSS (한국 종목)
+                if is_kr:
+                    enc_q = urllib.parse.quote(q)
+                    url = f"https://news.naver.com/search/News?query={enc_q}&sort=1&field=1&where=news&section=101&rss=1"
+                    try:
+                        req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=5) as r:
+                            tree = ET.parse(r)
+                        root = tree.getroot()
+                        ch = root.find("channel")
+                        if ch is not None:
+                            for item in ch.findall("item")[:5]:
+                                title = item.findtext("title","").replace("<b>","").replace("</b>","")
+                                link  = item.findtext("link","#")
+                                pub   = item.findtext("pubDate","")[:16] if item.findtext("pubDate") else ""
+                                desc  = item.findtext("description","").replace("<b>","").replace("</b>","")[:60]
+                                source = item.findtext("source", "네이버뉴스")
+                                if title:
+                                    results.append({"title":title,"link":link,"date":pub,"summary":desc,"source":source})
+                    except Exception:
+                        pass
 
-    try: _news_key = st.secrets.get("GEMINI_API_KEY","")
-    except Exception: _news_key=""
+                # 구글 뉴스 RSS
+                enc_q2 = urllib.parse.quote(f"{q} 주식" if is_kr else f"{q} stock")
+                hl = "ko" if is_kr else "en"
+                gl = "KR" if is_kr else "US"
+                url2 = f"https://news.google.com/rss/search?q={enc_q2}&hl={hl}&gl={gl}&ceid={gl}:{hl}"
+                req2 = urllib.request.Request(url2, headers={"User-Agent":"Mozilla/5.0"})
+                with urllib.request.urlopen(req2, timeout=5) as r2:
+                    tree2 = ET.parse(r2)
+                root2 = tree2.getroot()
+                ch2 = root2.find("channel")
+                if ch2 is not None:
+                    for item in ch2.findall("item")[:5]:
+                        title = item.findtext("title","")
+                        link  = item.findtext("link","#")
+                        pub   = item.findtext("pubDate","")[:16] if item.findtext("pubDate") else ""
+                        source = item.findtext("source","Google 뉴스")
+                        if title and title not in [r["title"] for r in results]:
+                            results.append({"title":title,"link":link,"date":pub,"summary":"","source":source})
+            except Exception:
+                continue
 
-    if not _news_key:
-        st.info("GEMINI_API_KEY를 설정하면 주요 뉴스를 볼 수 있어요.")
-    else:
-        _dk = datetime.today().strftime("%Y%m%d")
-        with st.spinner("뉴스 불러오는 중..."):
-            _news_items = get_simple_news(display_name, ticker_input, _news_key, _dk)
+        return results[:5]
 
-        _impact_color = {"긍정":"#22c55e","부정":"#ef4444","중립":"#94a3b8"}
-        _impact_icon  = {"긍정":"▲","부정":"▼","중립":"━"}
+    with st.spinner("뉴스 불러오는 중..."):
+        _rss_news = get_rss_news(display_name, ticker_input)
 
-        if _news_items:
-            for _ni in _news_items[:5]:
-                _imp = _ni.get("impact","중립")
-                _ic  = _impact_color.get(_imp,"#94a3b8")
-                _ii  = _impact_icon.get(_imp,"━")
-                _src = _ni.get("source","")
-                _dt  = _ni.get("date","")
-                st.markdown(f"""
-<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-  <span style="color:{_ic};font-size:12px;font-weight:700;margin-top:2px;flex-shrink:0;">{_ii}</span>
-  <div style="flex:1;min-width:0;">
-    <p style="color:#e2e8f0;font-size:12px;font-weight:500;margin:0 0 3px;line-height:1.5;">{_ni.get('title','')}</p>
-    <p style="color:#64748b;font-size:11px;margin:0;">{_ni.get('summary','')}
-    {f'<span style="color:#475569;margin-left:6px;">{_src} · {_dt}</span>' if _src else ''}
-    </p>
-  </div>
+    if _rss_news:
+        for _ni in _rss_news:
+            _title  = _ni.get("title","")
+            _link   = _ni.get("link","#")
+            _src    = _ni.get("source","")
+            _dt     = _ni.get("date","")
+            _summ   = _ni.get("summary","")
+            st.markdown(f"""
+<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+  <a href="{_link}" target="_blank"
+     style="color:#e2e8f0;font-size:12px;font-weight:500;text-decoration:none;line-height:1.5;display:block;margin-bottom:3px;">
+    {_title}
+  </a>
+  <span style="color:#475569;font-size:11px;">{_src}{" · " + _dt[:10] if _dt else ""}</span>
+  {f'<p style="color:#64748b;font-size:11px;margin:3px 0 0;">{_summ}</p>' if _summ else ''}
 </div>""", unsafe_allow_html=True)
-            st.caption(f"🤖 Gemini · {datetime.today().strftime('%m/%d %H:%M')} 기준")
-            if st.button("🔄 새로고침", key="refresh_news"):
-                get_simple_news.clear(); st.rerun()
-        else:
-            st.warning("⏳ API 한도 초과 또는 오류. 잠시 후 다시 시도해주세요.")
+        st.caption(f"📡 RSS 뉴스 · {datetime.today().strftime('%m/%d %H:%M')} 기준")
+        if st.button("🔄 새로고침", key="refresh_news"):
+            get_rss_news.clear(); st.rerun()
+    else:
+        st.info("뉴스를 불러올 수 없습니다. 🔄 새로고침을 눌러보세요.")
+        if st.button("🔄 새로고침", key="refresh_news_retry"):
+            get_rss_news.clear(); st.rerun()
 
 # ── 🤖 AI 주식 분석 (Gem 스타일 대화형) ─────────────────
 with col_ai:
