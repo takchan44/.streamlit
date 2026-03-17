@@ -1057,121 +1057,71 @@ with col_news:
         if st.button("🔄 새로고침", key="refresh_news_retry"):
             get_rss_news.clear(); st.rerun()
 
-# ── 🤖 AI 주식 분석 (Gem 스타일 대화형) ─────────────────
+# ── 🤖 Gemini 연동 ──────────────────────────────────────
 with col_ai:
-    st.markdown("### 🤖 AI 주식 분석")
+    st.markdown("### 🤖 Gemini AI 분석")
 
-    try: _ai_key = st.secrets.get("GEMINI_API_KEY","")
-    except Exception: _ai_key=""
-
-    # 대화 히스토리 초기화
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    if "chat_ticker" not in st.session_state:
-        st.session_state.chat_ticker = ""
-
-    # 종목 바뀌면 대화 초기화
-    if st.session_state.chat_ticker != ticker_input:
-        st.session_state.chat_history = []
-        st.session_state.chat_ticker  = ticker_input
-
-    # 시스템 컨텍스트 (현재 종목 정보 자동 포함)
-    _is_kr = ticker_input.endswith(".KS") or ticker_input.endswith(".KQ")
+    # 현재 종목 정보 포함한 프롬프트 생성
     _port_summary = ", ".join([
         f"{TICKER_NAME_MAP.get(p['ticker'],p['ticker'].replace('.KS',''))} {p['shares']}주"
         for p in st.session_state.portfolio
     ]) or "없음"
-    _stock_ctx = f"""현재 조회 종목: {display_name} ({code_display})
-현재가: {fmt_p(price)} | 등락률: {chg_pct:+.2f}% | 시가총액: {format_cap(mkt_cap)}
-52주 범위: {fmt_p(low_52)} ~ {fmt_p(high_52)} | P/E: {f"{pe:.1f}" if pe else "N/A"}
-보유 포트폴리오: {_port_summary}"""
 
-    _system_prompt = f"""당신은 전문 주식 분석가 AI입니다. 사용자의 투자 결정을 돕는 명확하고 실용적인 분석을 제공합니다.
+    _base_prompt = f"""[{display_name} ({code_display}) 주식 분석 요청]
+현재가: {fmt_p(price)} ({chg_pct:+.2f}%)
+시가총액: {format_cap(mkt_cap)}
+52주 범위: {fmt_p(low_52)} ~ {fmt_p(high_52)}
+P/E: {f"{pe:.1f}" if pe else "N/A"}
+보유 포트폴리오: {_port_summary}
 
-{_stock_ctx}
+질문: """
 
-분석 원칙:
-- 데이터 기반의 객관적 분석 제공
-- 투자 위험 항상 언급
-- 한국어로 친절하게 답변
-- 핵심을 간결하게 전달 (너무 길지 않게)
-- 매수/매도 의견 제시 시 근거 명확히 설명"""
+    import urllib.parse
 
-    # 대화창 표시
-    _chat_container = st.container(height=380)
-    with _chat_container:
-        if not st.session_state.chat_history:
-            st.markdown(f"""
-<div style="text-align:center;padding:30px 20px;color:#475569;">
-  <div style="font-size:28px;margin-bottom:12px;">🤖</div>
-  <p style="font-size:13px;font-weight:500;color:#94a3b8;margin:0 0 6px;">{display_name} AI 분석가</p>
-  <p style="font-size:12px;color:#475569;margin:0;">종목에 대해 무엇이든 물어보세요</p>
-</div>
-<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:0 10px;">
-  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">지금 매수 타이밍인가요?</span>
-  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">현재 주가 고평가인가요?</span>
-  <span style="background:#1e293b;color:#94a3b8;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;">리스크 요인을 알려주세요</span>
+    st.markdown(f"""
+<div style="background:#0d1526;border:1px solid #1e293b;border-radius:12px;padding:20px;text-align:center;">
+  <div style="font-size:32px;margin-bottom:10px;">✨</div>
+  <p style="color:#e2e8f0;font-size:14px;font-weight:500;margin:0 0 6px;">Gemini에서 분석하기</p>
+  <p style="color:#64748b;font-size:12px;margin:0 0 16px;line-height:1.6;">
+    버튼을 클릭하면 현재 종목 정보가 자동으로 포함된<br>질문이 Gemini에서 열려요
+  </p>
 </div>""", unsafe_allow_html=True)
+
+    # 빠른 질문 버튼들 — 클릭하면 Gemini로 이동
+    _quick_list = [
+        ("📈 매수 타이밍 분석", f"{_base_prompt}지금 매수하기 좋은 타이밍인가요? 기술적 분석과 펀더멘털을 바탕으로 분석해주세요."),
+        ("💰 고평가/저평가 분석", f"{_base_prompt}현재 주가가 고평가인지 저평가인지 분석해주세요."),
+        ("⚠️ 투자 리스크 분석", f"{_base_prompt}이 종목의 주요 투자 리스크 요인을 분석해주세요."),
+        ("🎯 목표주가 분석", f"{_base_prompt}애널리스트 목표주가와 현재 주가를 비교 분석해주세요."),
+        ("📊 실적 전망 분석", f"{_base_prompt}최근 실적과 향후 실적 전망을 분석해주세요."),
+    ]
+
+    for _ql, _qp in _quick_list:
+        _encoded = urllib.parse.quote(_qp)
+        _gemini_url = f"https://gemini.google.com/app?q={_encoded}"
+        st.markdown(f"""
+<a href="{_gemini_url}" target="_blank" style="text-decoration:none;">
+  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;margin-bottom:8px;
+              display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+              transition:border-color 0.2s;">
+    <span style="color:#e2e8f0;font-size:12px;font-weight:500;">{_ql}</span>
+    <span style="color:#3b82f6;font-size:12px;">Gemini로 열기 →</span>
+  </div>
+</a>""", unsafe_allow_html=True)
+
+    # 직접 질문 입력
+    st.markdown("<div style='margin-top:12px;'>", unsafe_allow_html=True)
+    _custom_q = st.text_input("직접 질문 입력", placeholder="예: 삼성전자 배당금은 얼마인가요?",
+                               key="gemini_custom_q", label_visibility="visible")
+    if st.button("✨ Gemini에서 분석하기", key="open_gemini", use_container_width=True, type="primary"):
+        if _custom_q.strip():
+            _full_q = _base_prompt + _custom_q.strip()
         else:
-            for _msg in st.session_state.chat_history:
-                if _msg["role"] == "user":
-                    st.markdown(f"""
-<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-  <div style="background:#1e40af;color:#fff;font-size:12px;padding:8px 12px;border-radius:12px 12px 2px 12px;max-width:85%;line-height:1.5;">{_msg['content']}</div>
-</div>""", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-<div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;">
-  <div style="width:24px;height:24px;background:#0f172a;border:1px solid #1e293b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🤖</div>
-  <div style="background:#0d1526;border:1px solid #1e293b;color:#e2e8f0;font-size:12px;padding:8px 12px;border-radius:2px 12px 12px 12px;max-width:90%;line-height:1.6;">{_msg['content']}</div>
-</div>""", unsafe_allow_html=True)
+            _full_q = _base_prompt + f"{display_name} 주식에 대해 종합적으로 분석해주세요."
+        _enc = urllib.parse.quote(_full_q)
+        _url = f"https://gemini.google.com/app?q={_enc}"
+        st.markdown(f'<meta http-equiv="refresh" content="0;url={_url}">', unsafe_allow_html=True)
+        st.markdown(f'<a href="{_url}" target="_blank">👉 Gemini에서 열기</a>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # 입력창
-    _q_col, _btn_col = st.columns([5, 1])
-    with _q_col:
-        _question = st.text_input("질문 입력", placeholder=f"{display_name}에 대해 질문하세요...",
-                                  key="chat_input", label_visibility="collapsed")
-    with _btn_col:
-        _send = st.button("전송", key="chat_send", use_container_width=True, type="primary")
-
-    # 빠른 질문 버튼
-    _qcols = st.columns(3)
-    _quick_qs = ["매수 타이밍?", "고평가 여부?", "주요 리스크?"]
-    for _qi, (_qc, _qq) in enumerate(zip(_qcols, _quick_qs)):
-        with _qc:
-            if st.button(_qq, key=f"quick_{_qi}", use_container_width=True):
-                _question = _qq
-                _send = True
-
-    # 전송 처리
-    if _send and _question.strip():
-        if not _ai_key:
-            st.warning("GEMINI_API_KEY를 Secrets에 설정해주세요.")
-        else:
-            st.session_state.chat_history.append({"role":"user","content":_question.strip()})
-            with st.spinner("분석 중..."):
-                try:
-                    import google.generativeai as genai2
-                    genai2.configure(api_key=_ai_key)
-                    _model = genai2.GenerativeModel(
-                        model_name="gemini-2.0-flash",
-                        system_instruction=_system_prompt
-                    )
-                    # 대화 히스토리 포함해서 전송
-                    _history_text = ""
-                    for _h in st.session_state.chat_history[:-1][-6:]:  # 최근 6개만
-                        _role = "사용자" if _h["role"]=="user" else "AI"
-                        _history_text += _role + ": " + _h["content"] + "\n"
-                    _full_prompt = f"{_history_text}사용자: {_question.strip()}"
-                    _resp = _model.generate_content(_full_prompt)
-                    _answer = _resp.text
-                    st.session_state.chat_history.append({"role":"assistant","content":_answer})
-                except Exception as e:
-                    st.session_state.chat_history.append({"role":"assistant","content":f"오류: {str(e)}"})
-            st.rerun()
-
-    # 대화 초기화 버튼
-    if st.session_state.chat_history:
-        if st.button("🗑 대화 초기화", key="clear_chat"):
-            st.session_state.chat_history = []
-            st.rerun()
+    st.caption("💡 버튼 클릭 시 현재 종목 데이터가 자동으로 Gemini에 전달돼요")
