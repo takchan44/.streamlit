@@ -599,14 +599,19 @@ with col_chart:
     tab_ma, tab_vp, tab_ind, tab_draw = st.tabs(["📈 이동평균선","📊 매물대","🔬 보조지표","✏️ 그리기"])
 
     with tab_ma:
-        # 작은 레이아웃을 위한 CSS
         st.markdown("""
 <style>
-[data-testid="stNumberInput"] input { padding: 3px 6px !important; font-size: 12px !important; height: 28px !important; }
-[data-testid="stNumberInput"] button { height: 28px !important; width: 24px !important; font-size: 13px !important; padding: 0 !important; }
-[data-testid="stColorPicker"] > label { font-size: 11px !important; margin-bottom: 2px !important; }
-[data-testid="stColorPicker"] { margin-top: 0 !important; }
-div[data-testid="column"] { padding: 0 4px !important; }
+/* 전체 행 높이 압축 */
+[data-testid="stNumberInput"] { margin-bottom: 0 !important; }
+[data-testid="stNumberInput"] > div { min-height: 0 !important; }
+[data-testid="stNumberInput"] input { height: 26px !important; padding: 2px 6px !important; font-size: 12px !important; }
+[data-testid="stNumberInput"] button { height: 26px !important; width: 22px !important; padding: 0 !important; font-size: 12px !important; }
+[data-testid="stColorPicker"] { margin-bottom: 0 !important; }
+[data-testid="stColorPicker"] > div > div { height: 26px !important; width: 36px !important; }
+[data-testid="stCheckbox"] { margin-bottom: 0 !important; padding: 0 !important; }
+[data-testid="stCheckbox"] label { padding: 0 !important; min-height: 0 !important; }
+div[data-testid="stVerticalBlock"] > div { gap: 4px !important; }
+[data-testid="element-container"] { margin-bottom: 0 !important; }
 </style>""", unsafe_allow_html=True)
         new_ma = []
         for idx, ma in enumerate(st.session_state.ma_settings):
@@ -614,7 +619,7 @@ div[data-testid="column"] { padding: 0 4px !important; }
             with c1:
                 show = st.checkbox("", value=ma["show"], key=f"ma_show_{idx}")
             with c2:
-                st.markdown(f"<p style='font-size:11px;color:#94a3b8;margin:6px 0 2px;'>MA{idx+1}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-size:11px;color:#94a3b8;margin:4px 0 0;'>MA{idx+1}</p>", unsafe_allow_html=True)
             with c3:
                 win = st.number_input(f"기간({unit})", min_value=1, max_value=500,
                                       value=ma["window"], key=f"ma_win_{idx}",
