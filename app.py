@@ -987,52 +987,44 @@ P/E: {f"{pe:.1f}" if pe else "N/A"}
 
 질문: """
 
-    import urllib.parse
-
-    st.markdown(f"""
-<div style="background:#0d1526;border:1px solid #1e293b;border-radius:12px;padding:20px;text-align:center;">
-  <div style="font-size:32px;margin-bottom:10px;">✨</div>
-  <p style="color:#e2e8f0;font-size:14px;font-weight:500;margin:0 0 6px;">Gemini에서 분석하기</p>
-  <p style="color:#64748b;font-size:12px;margin:0 0 16px;line-height:1.6;">
-    버튼을 클릭하면 현재 종목 정보가 자동으로 포함된<br>질문이 Gemini에서 열려요
-  </p>
-</div>""", unsafe_allow_html=True)
-
-    # 빠른 질문 버튼들 — 클릭하면 Gemini로 이동
+    # 빠른 질문 버튼 — 클릭하면 분석 내용을 텍스트박스에 표시 후 복사
     _quick_list = [
-        ("📈 매수 타이밍 분석", f"{_base_prompt}지금 매수하기 좋은 타이밍인가요? 기술적 분석과 펀더멘털을 바탕으로 분석해주세요."),
-        ("💰 고평가/저평가 분석", f"{_base_prompt}현재 주가가 고평가인지 저평가인지 분석해주세요."),
-        ("⚠️ 투자 리스크 분석", f"{_base_prompt}이 종목의 주요 투자 리스크 요인을 분석해주세요."),
-        ("🎯 목표주가 분석", f"{_base_prompt}애널리스트 목표주가와 현재 주가를 비교 분석해주세요."),
-        ("📊 실적 전망 분석", f"{_base_prompt}최근 실적과 향후 실적 전망을 분석해주세요."),
+        ("📈 매수 타이밍 분석", "지금 매수하기 좋은 타이밍인가요? 기술적 분석과 펀더멘털을 바탕으로 분석해주세요."),
+        ("💰 고평가/저평가 분석", "현재 주가가 고평가인지 저평가인지 분석해주세요."),
+        ("⚠️ 투자 리스크 분석", "이 종목의 주요 투자 리스크 요인을 분석해주세요."),
+        ("🎯 목표주가 분석", "애널리스트 목표주가와 현재 주가를 비교 분석해주세요."),
+        ("📊 실적 전망 분석", "최근 실적과 향후 실적 전망을 분석해주세요."),
     ]
 
-    for _ql, _qp in _quick_list:
-        _encoded = urllib.parse.quote(_qp)
-        _gemini_url = f"https://gemini.google.com/app?q={_encoded}"
-        st.markdown(f"""
-<a href="{_gemini_url}" target="_blank" style="text-decoration:none;">
-  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;margin-bottom:8px;
-              display:flex;align-items:center;justify-content:space-between;cursor:pointer;
-              transition:border-color 0.2s;">
-    <span style="color:#e2e8f0;font-size:12px;font-weight:500;">{_ql}</span>
-    <span style="color:#3b82f6;font-size:12px;">Gemini로 열기 →</span>
-  </div>
-</a>""", unsafe_allow_html=True)
+    if "gemini_prompt" not in st.session_state:
+        st.session_state.gemini_prompt = ""
 
-    # 직접 질문 입력
-    st.markdown("<div style='margin-top:12px;'>", unsafe_allow_html=True)
-    _custom_q = st.text_input("직접 질문 입력", placeholder="예: 삼성전자 배당금은 얼마인가요?",
-                               key="gemini_custom_q", label_visibility="visible")
-    if st.button("✨ Gemini에서 분석하기", key="open_gemini", use_container_width=True, type="primary"):
-        if _custom_q.strip():
-            _full_q = _base_prompt + _custom_q.strip()
-        else:
-            _full_q = _base_prompt + f"{display_name} 주식에 대해 종합적으로 분석해주세요."
-        _enc = urllib.parse.quote(_full_q)
-        _url = f"https://gemini.google.com/app?q={_enc}"
-        st.markdown(f'<meta http-equiv="refresh" content="0;url={_url}">', unsafe_allow_html=True)
-        st.markdown(f'<a href="{_url}" target="_blank">👉 Gemini에서 열기</a>', unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # 빠른 질문 버튼
+    _qcols = st.columns(2)
+    for _qi, (_ql, _qq) in enumerate(_quick_list):
+        with _qcols[_qi % 2]:
+            if st.button(_ql, key=f"gq_{_qi}", use_container_width=True):
+                st.session_state.gemini_prompt = _base_prompt + _qq
 
-    st.caption("💡 버튼 클릭 시 현재 종목 데이터가 자동으로 Gemini에 전달돼요")
+    # 직접 입력
+    _custom_q = st.text_input("직접 질문 입력",
+        placeholder="예: 삼성전자 배당금은 얼마인가요?",
+        key="gemini_custom_q")
+    if st.button("질문 준비", key="prepare_gemini", use_container_width=True):
+        q = _custom_q.strip() if _custom_q.strip() else f"{display_name} 주식에 대해 종합적으로 분석해주세요."
+        st.session_state.gemini_prompt = _base_prompt + q
+
+    # 준비된 프롬프트 표시 + 복사 안내
+    if st.session_state.gemini_prompt:
+        st.markdown("**📋 아래 내용을 복사해서 Gemini에 붙여넣으세요:**")
+        st.text_area("Gemini 질문 내용", value=st.session_state.gemini_prompt,
+                     height=180, key="gemini_prompt_box")
+        st.markdown("""
+<div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.3);
+     border-radius:8px;padding:10px 14px;margin-top:6px;">
+  <p style="color:#93c5fd;font-size:12px;margin:0;line-height:1.7;">
+    1️⃣ 위 텍스트박스 클릭 → <strong>Ctrl+A</strong> (전체선택) → <strong>Ctrl+C</strong> (복사)<br>
+    2️⃣ <a href="https://gemini.google.com" target="_blank" style="color:#60a5fa;">gemini.google.com</a> 접속<br>
+    3️⃣ 입력창에 <strong>Ctrl+V</strong> (붙여넣기) → 전송
+  </p>
+</div>""", unsafe_allow_html=True)
