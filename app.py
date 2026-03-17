@@ -601,39 +601,32 @@ with col_chart:
     with tab_ma:
         st.markdown("""
 <style>
-/* 전체 행 높이 압축 */
-[data-testid="stNumberInput"] { margin-bottom: 0 !important; }
-[data-testid="stNumberInput"] > div { min-height: 0 !important; }
 [data-testid="stNumberInput"] input { height: 26px !important; padding: 2px 6px !important; font-size: 12px !important; }
 [data-testid="stNumberInput"] button { height: 26px !important; width: 22px !important; padding: 0 !important; font-size: 12px !important; }
-[data-testid="stColorPicker"] { margin-bottom: 0 !important; }
 [data-testid="stColorPicker"] > div > div { height: 26px !important; width: 36px !important; }
-[data-testid="stCheckbox"] { margin-bottom: 0 !important; padding: 0 !important; }
-[data-testid="stCheckbox"] label { padding: 0 !important; min-height: 0 !important; }
-div[data-testid="stVerticalBlock"] > div { gap: 4px !important; }
-[data-testid="element-container"] { margin-bottom: 0 !important; }
 </style>""", unsafe_allow_html=True)
-        new_ma = []
-        for idx, ma in enumerate(st.session_state.ma_settings):
-            c1,c2,c3,c4 = st.columns([1,1,3,1])
-            with c1:
-                show = st.checkbox("", value=ma["show"], key=f"ma_show_{idx}")
-            with c2:
-                st.markdown(f"<p style='font-size:11px;color:#94a3b8;margin:4px 0 0;'>MA{idx+1}</p>", unsafe_allow_html=True)
-            with c3:
-                win = st.number_input(f"기간({unit})", min_value=1, max_value=500,
-                                      value=ma["window"], key=f"ma_win_{idx}",
-                                      label_visibility="collapsed")
-            with c4:
-                col = st.color_picker("", value=ma["color"], key=f"ma_col_{idx}",
-                                      label_visibility="collapsed")
-            new_ma.append({"window":win,"color":col,"show":show})
-        bc1,bc2 = st.columns(2)
-        if bc1.button("+ 추가", key="add_ma"):
-            st.session_state.ma_settings.append({"window":200,"color":"#22D3EE","show":True}); st.rerun()
-        if bc2.button("− 삭제", key="del_ma") and len(st.session_state.ma_settings)>1:
-            st.session_state.ma_settings.pop(); st.rerun()
-        st.session_state.ma_settings = new_ma
+        with st.expander("⚙️ 이동평균선 설정", expanded=False):
+            new_ma = []
+            for idx, ma in enumerate(st.session_state.ma_settings):
+                c1,c2,c3,c4 = st.columns([1,1,3,1])
+                with c1:
+                    show = st.checkbox("", value=ma["show"], key=f"ma_show_{idx}")
+                with c2:
+                    st.markdown(f"<p style='font-size:11px;color:#94a3b8;margin:4px 0 0;'>MA{idx+1}</p>", unsafe_allow_html=True)
+                with c3:
+                    win = st.number_input(f"기간({unit})", min_value=1, max_value=500,
+                                          value=ma["window"], key=f"ma_win_{idx}",
+                                          label_visibility="collapsed")
+                with c4:
+                    col = st.color_picker("", value=ma["color"], key=f"ma_col_{idx}",
+                                          label_visibility="collapsed")
+                new_ma.append({"window":win,"color":col,"show":show})
+            bc1,bc2 = st.columns(2)
+            if bc1.button("+ 추가", key="add_ma"):
+                st.session_state.ma_settings.append({"window":200,"color":"#22D3EE","show":True}); st.rerun()
+            if bc2.button("− 삭제", key="del_ma") and len(st.session_state.ma_settings)>1:
+                st.session_state.ma_settings.pop(); st.rerun()
+            st.session_state.ma_settings = new_ma
 
     with tab_vp:
         st.caption("매물대 구간 수와 색상을 설정하세요")
