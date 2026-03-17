@@ -427,7 +427,7 @@ def fmt_p(p):
     return f"₩{int(p):,}" if is_korean else f"${p:,.2f}"
 
 # ── 실시간 지수 티커 바 ──────────────────────────────────
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def get_market_indices():
     symbols = {
         "코스피":  "^KS11",
@@ -441,19 +441,50 @@ def get_market_indices():
         "WTI유가": "CL=F",
     }
     results = {}
+    # 한번에 모든 심볼 요청 (v7 quote API — 실시간 더 정확)
+    syms_str = ",".join(symbols.values())
+    url = f"https://query2.finance.yahoo.com/v7/finance/quote?symbols={syms_str}"
+    data = _yf_get(url)
+    if data:
+        try:
+            for q in data["quoteResponse"]["result"]:
+                sym   = q.get("symbol","")
+                price = q.get("regularMarketPrice", 0)
+                chg   = q.get("regularMarketChangePercent", 0)
+                prev  = q.get("regularMarketPreviousClose", price)
+                # 등락률이 0이면 직접 계산
+                if chg == 0 and prev and price != prev:
+                    chg = (price - prev) / prev * 100
+                # 심볼 → 이름 역매핑
+                for name, s in symbols.items():
+                    if s == sym:
+                        results[name] = {"price": price, "chg": chg, "sym": sym}
+                        break
+        except Exception:
+            pass
+    # 실패한 항목은 v8으로 개별 보완
     for name, sym in symbols.items():
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=2d"
-        data = _yf_get(url)
-        if data:
-            try:
-                meta = data["chart"]["result"][0]["meta"]
-                price = meta.get("regularMarketPrice", 0)
-                prev  = meta.get("previousClose", price)
-                chg   = ((price - prev) / prev * 100) if prev else 0
-                results[name] = {"price": price, "chg": chg, "sym": sym}
-            except Exception:
-                pass
+        if name not in results:
+            url2 = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=2d"
+            d2 = _yf_get(url2)
+            if d2:
+                try:
+                    meta  = d2["chart"]["result"][0]["meta"]
+                    price = meta.get("regularMarketPrice", 0)
+                    prev  = meta.get("previousClose", price)
+                    chg   = ((price - prev) / prev * 100) if prev else 0
+                    results[name] = {"price": price, "chg": chg, "sym": sym}
+                except Exception:
+                    pass
     return results
+
+# 티커 자동 갱신 — 30초마다 캐시 초기화
+import time as _t
+if "ticker_refresh_time" not in st.session_state:
+    st.session_state.ticker_refresh_time = _t.time()
+if _t.time() - st.session_state.ticker_refresh_time >= 30:
+    get_market_indices.clear()
+    st.session_state.ticker_refresh_time = _t.time()
 
 indices = get_market_indices()
 
