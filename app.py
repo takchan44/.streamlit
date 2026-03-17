@@ -580,7 +580,19 @@ c5.metric("52주 최저", fmt_p(low_52)  if low_52  else "N/A")
 c6.metric("P/E 비율",  f"{pe:.1f}" if pe else "N/A")
 
 st.markdown("---")
-col_chart, col_port = st.columns([2,1])
+# ── 차트/포트폴리오 비율 조절 ──────────────────────────
+if "col_ratio" not in st.session_state: st.session_state.col_ratio = 7
+_cr1, _cr2, _cr3 = st.columns([1, 6, 1])
+with _cr1: st.markdown("<p style='font-size:11px;color:#475569;margin-top:8px;'>◀ 넓게</p>", unsafe_allow_html=True)
+with _cr2:
+    st.session_state.col_ratio = st.slider(
+        "창 크기", 4, 9,
+        st.session_state.col_ratio,
+        key="col_ratio_slider", label_visibility="collapsed"
+    )
+with _cr3: st.markdown("<p style='font-size:11px;color:#475569;margin-top:8px;'>좁게 ▶</p>", unsafe_allow_html=True)
+_cr = st.session_state.col_ratio
+col_chart, col_port = st.columns([_cr, 10 - _cr])
 
 with col_chart:
     # ── 기간 버튼 ──
@@ -673,21 +685,16 @@ with col_chart:
             if st.button(f"선 전체 삭제 ({len(st.session_state.drawn_lines)}개)", key="clear_lines"):
                 st.session_state.drawn_lines = []; st.rerun()
 
-    # ── 차트 크기 슬라이더 (탭 밖 — 즉시 반영) ──────────
-    with st.expander("📐 차트 크기 조절", expanded=False):
-        sz1, sz2, sz3 = st.columns(3)
-        st.session_state.chart_height = sz1.slider(
-            "메인 차트 높이", 300, 1200,
-            st.session_state.get("chart_height", 500), step=50, key="sl_chart_h"
+    # ── 차트 크기 슬라이더 ──────────────────────────────
+    _rh_col, _rv_col = st.columns([6,1])
+    with _rh_col:
+        st.session_state.chart_height = st.slider(
+            "📐 차트 높이", 300, 1200,
+            st.session_state.get("chart_height", 500),
+            step=50, key="sl_chart_h", label_visibility="visible"
         )
-        st.session_state.vol_height = sz2.slider(
-            "거래량 높이", 40, 200,
-            st.session_state.get("vol_height", 80), step=10, key="sl_vol_h"
-        )
-        st.session_state.sub_height = sz3.slider(
-            "보조지표 높이", 100, 400,
-            st.session_state.get("sub_height", 160), step=20, key="sl_sub_h"
-        )
+    with _rv_col:
+        st.markdown(f"<p style='font-size:12px;color:#94a3b8;margin-top:28px;text-align:center;'>{st.session_state.chart_height}px</p>", unsafe_allow_html=True)
 
     # ── 데이터 로딩 & 리샘플 ──
     hist_raw = get_history(ticker_input, period_map[plabel])
